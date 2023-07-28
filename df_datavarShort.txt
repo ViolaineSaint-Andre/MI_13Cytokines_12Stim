@@ -1,0 +1,287 @@
+VARIABLE	VAR.DESC	VAR.VAL	Value	CATEGORY
+CMSEQ	Subject takes comcomitant drug treatment(s)	Number of different drug treatments		num
+CMSTDT	Duration of comcomitant drug treatment(s)	years		num
+TONSILLECTOMY	Cat:10:Tonsillectomy	0=No 1=Yes	0	cat
+APPENDICECTOMY	Cat:10:Appendicectomy	0=No 1=Yes	0	cat
+OTHER	Cat:10:Other	0=No 1=Yes	0	cat
+MEASLES	Cat:11:Measles	0=No 1=Yes NA=missing data	0	cat
+HEPATITISB	Cat:11:Hepatitis B	0=No 1=Yes NA=missing data	1	cat
+FLU	Cat:11:Flu	0=No 1=Yes	0	cat
+OTHER	Cat:11:Other	0=No 1=Yes	0	cat
+MEASLESMH	Cat:8:Measles	0=No 1=Yes/ antecedent	0	cat
+RUBELLAMH	Cat:8:Rubella	0=No 1=Yes/ antecedent NA=missing data	0	cat
+CHICKENPOXMH	Cat:8:Chicken pox	0=No 1=Yes/ antecedent 2=Yes/ current w/o treatment	0	cat
+MUMPSMH	Cat:8:Mumps	0=No 1=Yes/ antecedent NA=missing data	0	cat
+OTHERMH	Cat:8:Other	0=No 1=Yes/ antecedent	0	cat
+SURGICAL.INT	Surgical interventions (Cat:10)	0=No 1=Yes	0	cat
+MUMPS	Vaccination against mumps	0=No 1=Yes NA=missing data	0	cat
+MUMPS	Vaccination against mumps	0=No 1=Yes NA=missing data	1	cat
+MUMPS	Vaccination against mumps	0=No 1=Yes NA=missing data	NA	cat
+RUBELLA	Vaccination against rubella	0=No 1=Yes NA=missing data	0	cat
+RUBELLA	Vaccination against rubella	0=No 1=Yes NA=missing data	1	cat
+RUBELLA	Vaccination against rubella	0=No 1=Yes NA=missing data	Na	cat
+CONCEN	Difficulty concentrating on things like reading the newspaper or watching the television/ last 2 weeks	0/ 3/ 8/ 14 days the last two weeks		num
+DIFF	Difficulties falling asleep or staying asleep/ or sleeping too much/ last 2 weeks	0/ 3/ 8/ 14 days the last two weeks		num
+DORDIF	Does the subject often find it difficult to fall asleep or to remain asleep?	0/1/2/3 = Never/ Sometimes/ occasionally/ most of the time/ all the time	0	cat
+DORDIF	Does the subject often find it difficult to fall asleep or to remain asleep?	0/1/2/3 = Never/ Sometimes/ occasionally/ most of the time/ all the time	1	cat
+DORDIF	Does the subject often find it difficult to fall asleep or to remain asleep?	0/1/2/3 = Never/ Sometimes/ occasionally/ most of the time/ all the time	2	cat
+DORDIF	Does the subject often find it difficult to fall asleep or to remain asleep?	0/1/2/3 = Never/ Sometimes/ occasionally/ most of the time/ all the time	3	cat
+DORDIF	Does the subject often find it difficult to fall asleep or to remain asleep?	0/1/2/3 = Never/ Sometimes/ occasionally/ most of the time/ all the time	4	cat
+DORH.T1	Hours of sleep in decimal	hours/day		num
+DORLUM	On average/ how much light enters the subject’s bedroom while he/she is asleep?	0/1/2 = Never/ Sometimes/ occasionally/ most of the time/ all the time	0	cat
+DORLUM	On average/ how much light enters the subject’s bedroom while he/she is asleep?	0/1/2 = Never/ Sometimes/ occasionally/ most of the time/ all the time	1	cat
+DORLUM	On average/ how much light enters the subject’s bedroom while he/she is asleep?	0/1/2 = Never/ Sometimes/ occasionally/ most of the time/ all the time	2	cat
+DORLUM	On average/ how much light enters the subject’s bedroom while he/she is asleep?	0/1/2 = Never/ Sometimes/ occasionally/ most of the time/ all the time	3	cat
+DORLUM	On average/ how much light enters the subject’s bedroom while he/she is asleep?	0/1/2 = Never/ Sometimes/ occasionally/ most of the time/ all the time	4	cat
+FATI	Feeling tired or having little energy/ last 2 weeks	0/ 3/ 8/ 14 days the last two weeks		num
+HASCHICH	Haschich	0 = never/ 1 = rarely/ 2 = regularly	0	cat
+HASCHICH	Haschich	0 = never/ 1 = rarely/ 2 = regularly	1	cat
+HASCHICH	Haschich	0 = never/ 1 = rarely/ 2 = regularly	2	cat
+MBLESS	You have thought that you would be better off dead or have considered injuring yourself in some way/ last 2 weeks	0/ 3/ 8/ 14 days the last two weeks		num
+PLAIS	Lack of interest or pleasure in doing things/ last 2 weeks	0/ 3/ 8/ 14 days the last two weeks		num
+STRESS	Major Negative Life event/ loss of loved one etc./ last 12 month	0 = no/ 1 = yes	0	cat
+STRESS	Major Negative Life event/ loss of loved one etc./ last 12 month	0 = no/ 1 = yes	1	cat
+TRIS	Feeling sad/ depressed or despairing/ last 2 weeks	0/ 3/ 8/ 14 days the last two weeks		num
+NVILLES	Number of place(s) of residence (French department) before the age of 13	places		num
+VILLENPOP	Number of inhabitants in the place of birth	inhabitants		num
+VILLENPOP20	Number of inhabitants in the place of birth larger than 20/000	0=no 1=yes	0	cat
+VILLENPOP20	Number of inhabitants in the place of birth larger than 20/000	0=no 1=yes	1	cat
+VILLESPOP	Average number of inhabitants in the place(s) of residence before the age of 13	inhabitants		num
+VILLESPOP20	Number of inhabitants in at least one place of residence before the age of 13 larger than 20/000	0=no 1=yes	0	cat
+VILLESPOP20	Number of inhabitants in at least one place of residence before the age of 13 larger than 20/000	0=no 1=yes	1	cat
+ACCOUCH	Delivery time	0=Born at term 1=Premature NA=Unknown	0	cat
+ACCOUCH	Delivery time	0=Born at term 1=Premature NA=Unknown	1	cat
+ACCOUCH	Delivery time	0=Born at term 1=Premature NA=Unknown	NA	cat
+ACCOUNB	Number of weeks of premature birth	weeks NA=missing data		num
+ALIM	Mode of feeding at birth	0=Maternal breastfeeding 1=Formula milk NA=missing data or unknown	0	cat
+ALIM	Mode of feeding at birth	0=Maternal breastfeeding 1=Formula milk NA=missing data or unknown	1	cat
+ALIM	Mode of feeding at birth	0=Maternal breastfeeding 1=Formula milk NA=missing data or unknown	NA	cat
+ALIMDUR	Number of weeks of maternal breastfeeding	weeks NA=missing data		num
+NAISSP	Weight at birth	kg NA=missing data		num
+NAISST	Length at birth	cm NA=missing data		num
+VOIE	Route of delivery	0=Vaginal delivery 1=Caesarean section NA=Unknown	0	cat
+VOIE	Route of delivery	0=Vaginal delivery 1=Caesarean section NA=Unknown	1	cat
+VOIE	Route of delivery	0=Vaginal delivery 1=Caesarean section NA=Unknown	NA	cat
+ALLER	Allergic disease	0=No 1=Yes NA=missing data	0	cat
+ALLER	Allergic disease	0=No 1=Yes NA=missing data	1	cat
+ALLER	Allergic disease	0=No 1=Yes NA=missing data	NA	cat
+ATTAQUE	Cerebral accident/ haemorrhage or congestion	0=No 1=Yes NA=missing data	0	cat
+ATTAQUE	Cerebral accident/ haemorrhage or congestion	0=No 1=Yes NA=missing data	1	cat
+ATTAQUE	Cerebral accident/ haemorrhage or congestion	0=No 1=Yes NA=missing data	Na	cat
+CAUTRE	Other cancer	0=No 1=Yes NA=missing data	0	cat
+CAUTRE	Other cancer	0=No 1=Yes NA=missing data	1	cat
+CAUTRE	Other cancer	0=No 1=Yes NA=missing data	NA	cat
+CCOLON	Colon/rectum cancer	0=No 1=Yes NA=missing data	0	cat
+CCOLON	Colon/rectum cancer	0=No 1=Yes NA=missing data	1	cat
+CCOLON	Colon/rectum cancer	0=No 1=Yes NA=missing data	Na	cat
+CSEIN	Breast cancer	0=No 1=Yes NA=missing data	0	cat
+CSEIN	Breast cancer	0=No 1=Yes NA=missing data	1	cat
+CSEIN	Breast cancer	0=No 1=Yes NA=missing data	NA	cat
+DIABETE	Diabetes	0=No 1=Yes NA=missing data	0	cat
+DIABETE	Diabetes	0=No 1=Yes NA=missing data	1	cat
+DIABETE	Diabetes	0=No 1=Yes NA=missing data	Na	cat
+HYPERT	Arterial hypertension	0=No 1=Yes NA=missing data	0	cat
+HYPERT	Arterial hypertension	0=No 1=Yes NA=missing data	1	cat
+HYPERT	Arterial hypertension	0=No 1=Yes NA=missing data	NA	cat
+INFARC	Myocardial infarction	0=No 1=Yes NA=missing data	0	cat
+INFARC	Myocardial infarction	0=No 1=Yes NA=missing data	1	cat
+INFARC	Myocardial infarction	0=No 1=Yes NA=missing data	NA	cat
+ALCF	Glasses of spirits per week	glasses/week		num
+AMIDI	Eat only in the afternoon	0 = no/ 1 = yes	0	cat
+AMIDI	Eat only in the afternoon	0 = no/ 1 = yes	1	cat
+BIERE	Glasses of beer/cider per week	glasses/week		num
+CUISIN	Cooking	1/ 5/ 20/ times per month		num
+DEJ	Eats lunch	0 = always/ 1 = not always/ 2 = never	0	cat
+DEJ	Eats lunch	0 = always/ 1 = not always/ 2 = never	1	cat
+DEJ	Eats lunch	0 = always/ 1 = not always/ 2 = never	2	cat
+DESS	Desserts (cream desserts/ ice cream/ cream cakes/ etc.)	0/ 1/ 5/ 10/ 30/ 60 times per month		num
+DIFFATM	Essential oils by diffusion into the atmosphere	0/ 1/ 5/ 10/ 30 times per month		num
+DINER	Eats dinner	0 = always/ 1 = not always/ 2 = never	0	cat
+DINER	Eats dinner	0 = always/ 1 = not always/ 2 = never	1	cat
+DINER	Eats dinner	0 = always/ 1 = not always/ 2 = never	2	cat
+FASTF	Fast-food restaurants	0/ 1/ 5/ 20 times per month		num
+FCRUS	Raw fruit	0/ 1/ 5/ 10/ 30/ 60 times per month		num
+FCUITS	Cooked fruit (stewed fruit etc.)	0/ 1/ 5/ 10/ 30/ 60 times per month		num
+FECUL	Starchy foods (pasta/ rice/ potatoes etc.)	0/ 1/ 5/ 10/ 30/ 60 times per month		num
+FRITS	Fried products (chips/ crisps/ doughnuts/ nuggets/ cordon bleu/ etc.) or pasties/pies	0/ 1/ 5/ 10/ 30/ 60 times per month		num
+FROM	Cheese	0/ 1/ 5/ 10/ 30/ 60 times per month		num
+GRIGN	Nibble between meals	0 = never/ 1 = sometimes/ 2 = often	0	cat
+GRIGN	Nibble between meals	0 = never/ 1 = sometimes/ 2 = often	1	cat
+GRIGN	Nibble between meals	0 = never/ 1 = sometimes/ 2 = often	2	cat
+MATIN	Eat only in the morning	0 = no/ 1 = yes	0	cat
+MATIN	Eat only in the morning	0 = no/ 1 = yes	1	cat
+NCOLL	Eats no snacks	0 = no/ 1 = yes	0	cat
+NCOLL	Eats no snacks	0 = no/ 1 = yes	1	cat
+PDEJ	Eats breakfast	0 = always/ 1 = not always/ 2 = never	0	cat
+PDEJ	Eats breakfast	0 = always/ 1 = not always/ 2 = never	1	cat
+PDEJ	Eats breakfast	0 = always/ 1 = not always/ 2 = never	2	cat
+PLATC	Ready meals	0/ 1/ 5/ 10/ 30/ 60 times per month		num
+PRODALL1	Uses reduced sugar products	0 = no/ 1 = yes	0	cat
+PRODALL1	Uses reduced sugar products	0 = no/ 1 = yes	1	cat
+PRODALL2	Uses reduced fat products	0 = no/ 1 = yes	0	cat
+PRODALL2	Uses reduced fat products	0 = no/ 1 = yes	1	cat
+PRODALL3	Uses reduced salt products	0 = no/ 1 = yes	0	cat
+PRODALL3	Uses reduced salt products	0 = no/ 1 = yes	1	cat
+PRODALL4	Uses light products	0 = no/ 1 = yes	0	cat
+PRODALL4	Uses light products	0 = no/ 1 = yes	1	cat
+REPASH	Do you have regular mealtimes during workdays	0 = have regular mealtimes/ 1 = no	0	cat
+REPASH	Do you have regular mealtimes during workdays	0 = have regular mealtimes/ 1 = no	1	cat
+RESTAU	Restaurants other than work/ or at friends houses	1/ 5/ 20/ times per month		num
+SEL	Salt consumption habits	0 = doesnt salt food/ 1 often salts food	0	cat
+SEL	Salt consumption habits	0 = doesnt salt food/ 1 often salts food	1	cat
+SOIREE	Eat only during the evening or night	0 = no/ 1 = yes	0	cat
+SOIREE	Eat only during the evening or night	0 = no/ 1 = yes	1	cat
+VIANDE	Meat	0/ 1/ 5/ 10/ 30/ 60 times per month		num
+VIENN	Pastries and sweet breads (croissants/ brioches/ pains au chocolat/ etc.)	0/ 1/ 5/ 10/ 30/ 60 times per month		num
+VIN	Glasses of wine per week	glasses/week		num
+VITA	Vitamins only	0/ 1/ 5/ 10/ 30 times per month		num
+VORALE	Essential oils by oral route	0/ 1/ 5/ 10/ 30 times per month		num
+CHEVEUX	Hair colour	1=Black 2=Dark brown 3=Light brown 4=Red 5=Blond 6=Other	1	cat
+CHEVEUX	Hair colour	1=Black 2=Dark brown 3=Light brown 4=Red 5=Blond 6=Other	2	cat
+CHEVEUX	Hair colour	1=Black 2=Dark brown 3=Light brown 4=Red 5=Blond 6=Other	3	cat
+CHEVEUX	Hair colour	1=Black 2=Dark brown 3=Light brown 4=Red 5=Blond 6=Other	4	cat
+CHEVEUX	Hair colour	1=Black 2=Dark brown 3=Light brown 4=Red 5=Blond 6=Other	5	cat
+CHEVEUX	Hair colour	1=Black 2=Dark brown 3=Light brown 4=Red 5=Blond 6=Other	6	cat
+CORREC	Corrective lenses worn	0=no 1=yes	0	cat
+CORREC	Corrective lenses worn	0=no 1=yes	1	cat
+CORRECP	Type of corrective lenses	1=glasses 2=contact lenses	1	cat
+CORRECP	Type of corrective lenses	1=glasses 2=contact lenses	2	cat
+LOG	Does the subject own his/her housing?	1=landlord 2=leaser	1	cat
+LOG	Does the subject own his/her housing?	1=landlord 2=leaser		cat
+PHYSDUR.T1	Duration of professional physical activity	proportion of 8h working day		num
+PHYSJ	Days per week of physical activity during leisure	days per week		num
+PHYSL	Physical activity during leisure	1=Little or no physical activity 2=Moderate physical activity 3=Intense physical activity	1	cat
+PHYSL	Physical activity during leisure	1=Little or no physical activity 2=Moderate physical activity 3=Intense physical activity	2	cat
+PHYSL	Physical activity during leisure	1=Little or no physical activity 2=Moderate physical activity 3=Intense physical activity	3	cat
+PHYSP.T1	Professional physical activity	0=no 1=yes	0	cat
+PHYSP.T1	Professional physical activity	0=no 1=yes	1	cat
+PHYST.T1	Hours per week of physical activity during leisure	hours per week		num
+VIT	Subject shares housing with...	1=Alone with no children 2=Alone with children 3=With a partner but no children 4=With a partner and children	1	cat
+VIT	Subject shares housing with...	1=Alone with no children 2=Alone with children 3=With a partner but no children 4=With a partner and children	2	cat
+VIT	Subject shares housing with...	1=Alone with no children 2=Alone with children 3=With a partner but no children 4=With a partner and children	3	cat
+VIT	Subject shares housing with...	1=Alone with no children 2=Alone with children 3=With a partner but no children 4=With a partner and children	4	cat
+VIT.COUPLE	Subject shares housing with his/her partner	0=no 1=yes	0	cat
+VIT.COUPLE	Subject shares housing with his/her partner	0=no 1=yes	1	cat
+VIT.ENFANTS	Subject shares housing with his/her children	0=no 1=yes	0	cat
+VIT.ENFANTS	Subject shares housing with his/her children	0=no 1=yes	1	cat
+YEUX.T1	Transformed eye colour	1=Gray 2=Blue 3=Green/Hazel green 4=Hazel brown 5=Light brown 6=Dark brown 7=Other	1	cat
+YEUX.T1	Transformed eye colour	1=Gray 2=Blue 3=Green/Hazel green 4=Hazel brown 5=Light brown 6=Dark brown 7=Other	2	cat
+YEUX.T1	Transformed eye colour	1=Gray 2=Blue 3=Green/Hazel green 4=Hazel brown 5=Light brown 6=Dark brown 7=Other	3	cat
+YEUX.T1	Transformed eye colour	1=Gray 2=Blue 3=Green/Hazel green 4=Hazel brown 5=Light brown 6=Dark brown 7=Other	4	cat
+YEUX.T1	Transformed eye colour	1=Gray 2=Blue 3=Green/Hazel green 4=Hazel brown 5=Light brown 6=Dark brown 7=Other	5	cat
+YEUX.T1	Transformed eye colour	1=Gray 2=Blue 3=Green/Hazel green 4=Hazel brown 5=Light brown 6=Dark brown 7=Other	6	cat
+YEUX.T1	Transformed eye colour	1=Gray 2=Blue 3=Green/Hazel green 4=Hazel brown 5=Light brown 6=Dark brown 7=Other	7	cat
+BRUIT	Exposure to noise	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	0	cat
+BRUIT	Exposure to noise	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	1	cat
+BRUIT	Exposure to noise	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	2	cat
+BRUIT	Exposure to noise	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	NA	cat
+CSP	Socio-professional category/ if ever employed	1=Farmer 2=Artisan/ tradesman/ company director 3=Senior executive/ independent profession 4=Middle management 5=Employee 6=Labourer 7=Other (e.g. artist/ clergy/ soldier/ policeman) NA=missing data NaN=not applicable	1	cat
+CSP	Socio-professional category/ if ever employed	1=Farmer 2=Artisan/ tradesman/ company director 3=Senior executive/ independent profession 4=Middle management 5=Employee 6=Labourer 7=Other (e.g. artist/ clergy/ soldier/ policeman) NA=missing data NaN=not applicable	2	cat
+CSP	Socio-professional category/ if ever employed	1=Farmer 2=Artisan/ tradesman/ company director 3=Senior executive/ independent profession 4=Middle management 5=Employee 6=Labourer 7=Other (e.g. artist/ clergy/ soldier/ policeman) NA=missing data NaN=not applicable	3	cat
+CSP	Socio-professional category/ if ever employed	1=Farmer 2=Artisan/ tradesman/ company director 3=Senior executive/ independent profession 4=Middle management 5=Employee 6=Labourer 7=Other (e.g. artist/ clergy/ soldier/ policeman) NA=missing data NaN=not applicable	4	cat
+CSP	Socio-professional category/ if ever employed	1=Farmer 2=Artisan/ tradesman/ company director 3=Senior executive/ independent profession 4=Middle management 5=Employee 6=Labourer 7=Other (e.g. artist/ clergy/ soldier/ policeman) NA=missing data NaN=not applicable	5	cat
+CSP	Socio-professional category/ if ever employed	1=Farmer 2=Artisan/ tradesman/ company director 3=Senior executive/ independent profession 4=Middle management 5=Employee 6=Labourer 7=Other (e.g. artist/ clergy/ soldier/ policeman) NA=missing data NaN=not applicable	6	cat
+CSP	Socio-professional category/ if ever employed	1=Farmer 2=Artisan/ tradesman/ company director 3=Senior executive/ independent profession 4=Middle management 5=Employee 6=Labourer 7=Other (e.g. artist/ clergy/ soldier/ policeman) NA=missing data NaN=not applicable	7	cat
+CSP	Socio-professional category/ if ever employed	1=Farmer 2=Artisan/ tradesman/ company director 3=Senior executive/ independent profession 4=Middle management 5=Employee 6=Labourer 7=Other (e.g. artist/ clergy/ soldier/ policeman) NA=missing data NaN=not applicable	NA	cat
+CSP	Socio-professional category/ if ever employed	1=Farmer 2=Artisan/ tradesman/ company director 3=Senior executive/ independent profession 4=Middle management 5=Employee 6=Labourer 7=Other (e.g. artist/ clergy/ soldier/ policeman) NA=missing data NaN=not applicable	NaN	cat
+EMPLOIP	Category of unemployment	1=Student 2=Looking for first job 3=Unemployed 4=Housewife/househusband 5=Retired NA=missing data NaN=not applicable	1	cat
+EMPLOIP	Category of unemployment	1=Student 2=Looking for first job 3=Unemployed 4=Housewife/househusband 5=Retired NA=missing data NaN=not applicable	2	cat
+EMPLOIP	Category of unemployment	1=Student 2=Looking for first job 3=Unemployed 4=Housewife/househusband 5=Retired NA=missing data NaN=not applicable	3	cat
+EMPLOIP	Category of unemployment	1=Student 2=Looking for first job 3=Unemployed 4=Housewife/househusband 5=Retired NA=missing data NaN=not applicable	4	cat
+EMPLOIP	Category of unemployment	1=Student 2=Looking for first job 3=Unemployed 4=Housewife/househusband 5=Retired NA=missing data NaN=not applicable	5	cat
+EMPLOIP	Category of unemployment	1=Student 2=Looking for first job 3=Unemployed 4=Housewife/househusband 5=Retired NA=missing data NaN=not applicable	NA	cat
+EMPLOIP	Category of unemployment	1=Student 2=Looking for first job 3=Unemployed 4=Housewife/househusband 5=Retired NA=missing data NaN=not applicable	NaN	cat
+EMPLOIS	Steady job	0=No 1=Yes NA=missing data	0	cat
+EMPLOIS	Steady job	0=No 1=Yes NA=missing data	1	cat
+EMPLOIS	Steady job	0=No 1=Yes NA=missing data	NA	cat
+INACT	Time without professional activity/ if unemployed or retired	0=Never worked 1=0-1 year 2=1-3 years 3=3 and more years NA=missing data NaN=not applicable	0	cat
+INACT	Time without professional activity/ if unemployed or retired	0=Never worked 1=0-1 year 2=1-3 years 3=3 and more years NA=missing data NaN=not applicable	1	cat
+INACT	Time without professional activity/ if unemployed or retired	0=Never worked 1=0-1 year 2=1-3 years 3=3 and more years NA=missing data NaN=not applicable	2	cat
+INACT	Time without professional activity/ if unemployed or retired	0=Never worked 1=0-1 year 2=1-3 years 3=3 and more years NA=missing data NaN=not applicable	3	cat
+INACT	Time without professional activity/ if unemployed or retired	0=Never worked 1=0-1 year 2=1-3 years 3=3 and more years NA=missing data NaN=not applicable	NA	cat
+INACT	Time without professional activity/ if unemployed or retired	0=Never worked 1=0-1 year 2=1-3 years 3=3 and more years NA=missing data NaN=not applicable	NaN	cat
+NIVETUD	Level of education	1=No diploma 2=Primary school certificate 3=CAP/ BEP/ Brevet de colleges 4=Baccalaureat 5=Higher education/ cycle 1 (DUT/ BTS/ DEUG/ L2) 6=Higher education/ cycle 2 and 3 (L3/ M1/ M2/ PhD)	1	cat
+NIVETUD	Level of education	1=No diploma 2=Primary school certificate 3=CAP/ BEP/ Brevet de colleges 4=Baccalaureat 5=Higher education/ cycle 1 (DUT/ BTS/ DEUG/ L2) 6=Higher education/ cycle 2 and 3 (L3/ M1/ M2/ PhD)	2	cat
+NIVETUD	Level of education	1=No diploma 2=Primary school certificate 3=CAP/ BEP/ Brevet de colleges 4=Baccalaureat 5=Higher education/ cycle 1 (DUT/ BTS/ DEUG/ L2) 6=Higher education/ cycle 2 and 3 (L3/ M1/ M2/ PhD)	3	cat
+NIVETUD	Level of education	1=No diploma 2=Primary school certificate 3=CAP/ BEP/ Brevet de colleges 4=Baccalaureat 5=Higher education/ cycle 1 (DUT/ BTS/ DEUG/ L2) 6=Higher education/ cycle 2 and 3 (L3/ M1/ M2/ PhD)	4	cat
+NIVETUD	Level of education	1=No diploma 2=Primary school certificate 3=CAP/ BEP/ Brevet de colleges 4=Baccalaureat 5=Higher education/ cycle 1 (DUT/ BTS/ DEUG/ L2) 6=Higher education/ cycle 2 and 3 (L3/ M1/ M2/ PhD)	5	cat
+NIVETUD	Level of education	1=No diploma 2=Primary school certificate 3=CAP/ BEP/ Brevet de colleges 4=Baccalaureat 5=Higher education/ cycle 1 (DUT/ BTS/ DEUG/ L2) 6=Higher education/ cycle 2 and 3 (L3/ M1/ M2/ PhD)	6	cat
+POUSS	Exposure to dust	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	0	cat
+POUSS	Exposure to dust	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	1	cat
+POUSS	Exposure to dust	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	2	cat
+POUSS	Exposure to dust	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	NA	cat
+PTOX	Exposure to toxic products	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	0	cat
+PTOX	Exposure to toxic products	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	1	cat
+PTOX	Exposure to toxic products	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	2	cat
+PTOX	Exposure to toxic products	0=No exposure 1=Past exposure 2=Current exposure NA=Unknown	NA	cat
+REVENUS	Net monthly income of the household (EUR)	1=0-1000€ 2=1001-2000€ 3=2001-3000€ 4=3001-4000€ 5=4001-5000€ 6=5001€ and more NA=missing data	1	cat
+REVENUS	Net monthly income of the household (EUR)	1=0-1000€ 2=1001-2000€ 3=2001-3000€ 4=3001-4000€ 5=4001-5000€ 6=5001€ and more NA=missing data	2	cat
+REVENUS	Net monthly income of the household (EUR)	1=0-1000€ 2=1001-2000€ 3=2001-3000€ 4=3001-4000€ 5=4001-5000€ 6=5001€ and more NA=missing data	3	cat
+REVENUS	Net monthly income of the household (EUR)	1=0-1000€ 2=1001-2000€ 3=2001-3000€ 4=3001-4000€ 5=4001-5000€ 6=5001€ and more NA=missing data	4	cat
+REVENUS	Net monthly income of the household (EUR)	1=0-1000€ 2=1001-2000€ 3=2001-3000€ 4=3001-4000€ 5=4001-5000€ 6=5001€ and more NA=missing data	5	cat
+REVENUS	Net monthly income of the household (EUR)	1=0-1000€ 2=1001-2000€ 3=2001-3000€ 4=3001-4000€ 5=4001-5000€ 6=5001€ and more NA=missing data	6	cat
+REVENUS	Net monthly income of the household (EUR)	1=0-1000€ 2=1001-2000€ 3=2001-3000€ 4=3001-4000€ 5=4001-5000€ 6=5001€ and more NA=missing data	NA	cat
+SUBJID	Subject ID	NA		freetext
+TRAVJ	Working time	1=Exclusively during the day 2=Exclusively during the night 3=Without fixed hours NA=missing data NaN=not applicable	1	cat
+TRAVJ	Working time	1=Exclusively during the day 2=Exclusively during the night 3=Without fixed hours NA=missing data NaN=not applicable	2	cat
+TRAVJ	Working time	1=Exclusively during the day 2=Exclusively during the night 3=Without fixed hours NA=missing data NaN=not applicable	3	cat
+TRAVJ	Working time	1=Exclusively during the day 2=Exclusively during the night 3=Without fixed hours NA=missing data NaN=not applicable	NA	cat
+TRAVJ	Working time	1=Exclusively during the day 2=Exclusively during the night 3=Without fixed hours NA=missing data NaN=not applicable	NaN	cat
+TRAVT	Type of employment	0=Part time 1=Full time NA=missing data NaN=not applicable		cat
+NBYLPSEXP	Number of years since last second hand smoking exposure	Years		num
+NBYLTABAC	Number of years since last smoke	Years		num
+NBYPSEXP	Number of years exposed to second hand smoking	Years		num
+NBYTABAC	Number of years smoking	Years		num
+PSEXP	Second hand smoking	0 = never been exposed/ 1 = exposed in past/ 2 =  currently exposed	0	cat
+PSEXP	Second hand smoking	0 = never been exposed/ 1 = exposed in past/ 2 =  currently exposed	1	cat
+PSEXP	Second hand smoking	0 = never been exposed/ 1 = exposed in past/ 2 =  currently exposed	2	cat
+TABAC.T1	Smoking tobacco?	Non-smoker = 0/ Ex-Smoker = 1/ Smoker = 2	0	cat
+TABAC.T1	Smoking tobacco?	Non-smoker = 0/ Ex-Smoker = 1/ Smoker = 2	1	cat
+TABAC.T1	Smoking tobacco?	Non-smoker = 0/ Ex-Smoker = 1/ Smoker = 2	2	cat
+TOTNROFCIGS	Total number of cigarettes smoked	Cigarettes		num
+CMV.V1	Interpretation of CMV (CytoMegaloVirus) ToRC IgG test (ref. 665-1650/ BioPlex 2200 System)	0=negative (CMV.V1.T1<=0.8) 1=grey zone 2=positive(CMV.V1.T1=>1.1)	0	cat
+CMV.V1	Interpretation of CMV (CytoMegaloVirus) ToRC IgG test (ref. 665-1650/ BioPlex 2200 System)	0=negative (CMV.V1.T1<=0.8) 1=grey zone 2=positive(CMV.V1.T1=>1.1)	1	cat
+CMV.V1	Interpretation of CMV (CytoMegaloVirus) ToRC IgG test (ref. 665-1650/ BioPlex 2200 System)	0=negative (CMV.V1.T1<=0.8) 1=grey zone 2=positive(CMV.V1.T1=>1.1)	2	cat
+EBV.EA.V1	Interpretation of EBV (Epstein Barr Virus) anti-EA IgG test (ref. 665-1250/ BioPlex 2200 System)	0=negative (EBV.EAG.V1.T1<=0.8) 1=grey zone 2=positive(EBV.EAG.V1.T1=>1.1)	0	cat
+EBV.EA.V1	Interpretation of EBV (Epstein Barr Virus) anti-EA IgG test (ref. 665-1250/ BioPlex 2200 System)	0=negative (EBV.EAG.V1.T1<=0.8) 1=grey zone 2=positive(EBV.EAG.V1.T1=>1.1)	1	cat
+EBV.EA.V1	Interpretation of EBV (Epstein Barr Virus) anti-EA IgG test (ref. 665-1250/ BioPlex 2200 System)	0=negative (EBV.EAG.V1.T1<=0.8) 1=grey zone 2=positive(EBV.EAG.V1.T1=>1.1)	2	cat
+EBV.EBNA.V1	Interpretation of EBV (Epstein Barr Virus) anti-EBNA IgG test (ref. 665-1250/ BioPlex 2200 System)	0=negative (EBV.EBNA.V1.T1<=0.8) 1=grey zone 2=positive(EBV.EBNA.V1.T1=>1.1)	0	cat
+EBV.EBNA.V1	Interpretation of EBV (Epstein Barr Virus) anti-EBNA IgG test (ref. 665-1250/ BioPlex 2200 System)	0=negative (EBV.EBNA.V1.T1<=0.8) 1=grey zone 2=positive(EBV.EBNA.V1.T1=>1.1)	1	cat
+EBV.EBNA.V1	Interpretation of EBV (Epstein Barr Virus) anti-EBNA IgG test (ref. 665-1250/ BioPlex 2200 System)	0=negative (EBV.EBNA.V1.T1<=0.8) 1=grey zone 2=positive(EBV.EBNA.V1.T1=>1.1)	2	cat
+HBS.V1	Interpretation of HBV (Hepatitis B Virus) anti-HBs IgG test (ref. 7C18/ Architect Abblott)	0=negative (HBS.V1.T1<10) 1=positive (HBS.V1.T1>10)	0	cat
+HBS.V1	Interpretation of HBV (Hepatitis B Virus) anti-HBs IgG test (ref. 7C18/ Architect Abblott)	0=negative (HBS.V1.T1<10) 1=positive (HBS.V1.T1>10)	1	cat
+HP.V1	Interpretation of HP (Helicobacter pylori) IgG test (mini VIDAS H. pylori IgG/ BioMérieux/ batch 161129-0)	0=negative (HP.V1.T1<0.75) 1=grey zone 2=positive (HP.V1.T1=>1.0)	0	cat
+HP.V1	Interpretation of HP (Helicobacter pylori) IgG test (mini VIDAS H. pylori IgG/ BioMérieux/ batch 161129-0)	0=negative (HP.V1.T1<0.75) 1=grey zone 2=positive (HP.V1.T1=>1.0)	1	cat
+HP.V1	Interpretation of HP (Helicobacter pylori) IgG test (mini VIDAS H. pylori IgG/ BioMérieux/ batch 161129-0)	0=negative (HP.V1.T1<0.75) 1=grey zone 2=positive (HP.V1.T1=>1.0)	2	cat
+HP.V1.QT	Semi-quantitative value of IgG against HP (Helicobacter pylori)	IA		num
+HSV1.V1	Interpretation of HSV1 (Herpes Simplex Virus 1) IgG test (ref. 665-3350/ BioPlex 2200 System)	0=negative (HSV1.V1.T1<0.9) 1=grey zone 2=positive(HSV1.V1.T1=>1.1)	0	cat
+HSV1.V1	Interpretation of HSV1 (Herpes Simplex Virus 1) IgG test (ref. 665-3350/ BioPlex 2200 System)	0=negative (HSV1.V1.T1<0.9) 1=grey zone 2=positive(HSV1.V1.T1=>1.1)	1	cat
+HSV1.V1	Interpretation of HSV1 (Herpes Simplex Virus 1) IgG test (ref. 665-3350/ BioPlex 2200 System)	0=negative (HSV1.V1.T1<0.9) 1=grey zone 2=positive(HSV1.V1.T1=>1.1)	2	cat
+HSV2.V1	Interpretation of HSV2 (Herpes Simplex Virus 2) IgG test (ref. 665-3350/ BioPlex 2200 System)	0=negative (HSV2.V1.T1<0.9) 1=grey zone 2=positive(HSV2.V1.T1=>1.1)	0	cat
+HSV2.V1	Interpretation of HSV2 (Herpes Simplex Virus 2) IgG test (ref. 665-3350/ BioPlex 2200 System)	0=negative (HSV2.V1.T1<0.9) 1=grey zone 2=positive(HSV2.V1.T1=>1.1)	1	cat
+HSV2.V1	Interpretation of HSV2 (Herpes Simplex Virus 2) IgG test (ref. 665-3350/ BioPlex 2200 System)	0=negative (HSV2.V1.T1<0.9) 1=grey zone 2=positive(HSV2.V1.T1=>1.1)	2	cat
+ORE.V1	Interpretation of Mumps MMRV IgG test (ref. 665-2450/ BioPlex 2200 System)	0=negative (ORE.V1.T1<=0.8) 1=grey zone 2=positive(ORE.V1.T1=>1.1)	0	cat
+ORE.V1	Interpretation of Mumps MMRV IgG test (ref. 665-2450/ BioPlex 2200 System)	0=negative (ORE.V1.T1<=0.8) 1=grey zone 2=positive(ORE.V1.T1=>1.1)	1	cat
+ORE.V1	Interpretation of Mumps MMRV IgG test (ref. 665-2450/ BioPlex 2200 System)	0=negative (ORE.V1.T1<=0.8) 1=grey zone 2=positive(ORE.V1.T1=>1.1)	2	cat
+ROUG.V1	Interpretation of Measles MMRV IgG test (ref. 665-2450/ BioPlex 2200 System)	0=negative (ROUG.V1.T1<=0.8) 1=grey zone 2=positive(ROUG.V1.T1=>1.1)	0	cat
+ROUG.V1	Interpretation of Measles MMRV IgG test (ref. 665-2450/ BioPlex 2200 System)	0=negative (ROUG.V1.T1<=0.8) 1=grey zone 2=positive(ROUG.V1.T1=>1.1)	1	cat
+ROUG.V1	Interpretation of Measles MMRV IgG test (ref. 665-2450/ BioPlex 2200 System)	0=negative (ROUG.V1.T1<=0.8) 1=grey zone 2=positive(ROUG.V1.T1=>1.1)	2	cat
+TXP.V1	Interpretation of Toxoplasmosis ToRC IgG test (ref. 665-1650/ BioPlex 2200 System)	0=negative (TXP.V1.T1<=9) 1=grey zone 2=positive(TXP.V1.T1=>12)	0	cat
+TXP.V1	Interpretation of Toxoplasmosis ToRC IgG test (ref. 665-1650/ BioPlex 2200 System)	0=negative (TXP.V1.T1<=9) 1=grey zone 2=positive(TXP.V1.T1=>12)	1	cat
+TXP.V1	Interpretation of Toxoplasmosis ToRC IgG test (ref. 665-1650/ BioPlex 2200 System)	0=negative (TXP.V1.T1<=9) 1=grey zone 2=positive(TXP.V1.T1=>12)	2	cat
+VZV.V1	Interpretation of VZV (Varicella Zoster Virus) MMRV IgG test (ref. 665-2450/ BioPlex 2200 System)	0=negative (VZV.V1.T1<=0.8) 1=grey zone 2=positive(VZV.V1.T1=>1.1)	0	cat
+VZV.V1	Interpretation of VZV (Varicella Zoster Virus) MMRV IgG test (ref. 665-2450/ BioPlex 2200 System)	0=negative (VZV.V1.T1<=0.8) 1=grey zone 2=positive(VZV.V1.T1=>1.1)	1	cat
+VZV.V1	Interpretation of VZV (Varicella Zoster Virus) MMRV IgG test (ref. 665-2450/ BioPlex 2200 System)	0=negative (VZV.V1.T1<=0.8) 1=grey zone 2=positive(VZV.V1.T1=>1.1)	2	cat
+ABDOCM.V0	Abdominal circumference V0	cm		num
+BMI.V0	BMI (kg/m^2) Visit 1	kg/m^2		num
+DIABP1.V0	Diastolic measure 1 (mmHg) Visit 1	mmHg		num
+DIABP2.V0	Diastolic measure 2 (mmHg) Visit 1	mmHg		num
+FC.V0	Heart rate (bpm) Visit 1	bpm		num
+HEIGHT.V0	Height (cm) Visit 1	cm		num
+SYSBP1.V0	Systolic measure 1 (mmHg) Visit 1	mmHg		num
+TEMP.V0	Ear temperature (°C) Visit 1	°C		num
+WEIGHT.V0	Weight (kg) Visit 1	kg		num
+SEASON	Season of sampling	0=winter(jan-mar) 1=spring(apr-jun) 2=summer(jul-sept) 3=autumn(oct-dec)	0	cat
+SEASON	Season of sampling	0=winter(jan-mar) 1=spring(apr-jun) 2=summer(jul-sept) 3=autumn(oct-dec)	1	cat
+SEASON	Season of sampling	0=winter(jan-mar) 1=spring(apr-jun) 2=summer(jul-sept) 3=autumn(oct-dec)	2	cat
+SEASON	Season of sampling	0=winter(jan-mar) 1=spring(apr-jun) 2=summer(jul-sept) 3=autumn(oct-dec)	3	cat
