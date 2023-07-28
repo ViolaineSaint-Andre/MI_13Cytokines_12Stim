@@ -1,0 +1,115 @@
+---
+title: "Milieu Intérieur Project: Cytokine Data Analysis"
+date: "2023-06-10"
+author: "Violaine Saint-André"
+
+## License
+#  Milieu Intérieur Project: Cytokine Data Analysis
+#     Copyright (C) 2023  Violaine Saint-André
+#     contact: violaine.saint-andre@pasteur.fr
+# 
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+##
+---
+
+## Set parameters and import libraries
+```{r, results="hide"}
+
+# import libraries
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+library(rmarkdown)
+library(reshape2)
+library(RColorBrewer) 
+library(scales)
+library(cowplot)
+library(ggplot2)
+
+# set path for results
+pathRes <- "./RESULTS"
+
+```
+## Import proteomic matrix
+
+```{r, results="hide"}
+df.data <- read.table(file="./TableS1.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+
+# remove the donors that have been reprocessed
+  # adding 302 as it is missing values for LPS 
+  # removed 883 who removed consent for everything
+df.data.v1 <- df.data %>% 
+  filter(!(DonorId %in% c(96, 104,	122,	167,	178,	219,	268,	279,	303,	308,	534,	701, 302, 883))) 
+
+dta <- df.data.v1[,c(1,2:ncol(df.data.v1))]
+
+#Log transformation
+dta.log <- dta
+dta.log[,4:ncol(dta)] <- log(dta[,4:ncol(dta)])
+dataProt <- dta.log
+
+head(dataProt)
+
+```
+
+## Import covariates
+```{r, results="hide"}
+
+cisSNPs <- read.table(file="./Geno_cisSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+
+data_cisSNPsProt <- merge(dataProt, cisSNPs, by.x= "DonorId", by.y="SUBJID")
+
+
+```
+
+## Boxplots
+```{r, results="hide"}
+
+library('ggsignif')
+
+df_data_allsel_cisSNPs_transSNPsNA <- data_cisSNPsProt
+
+df.dataProt_temp <- dataProt %>% gather(key = 'Analyte', value = 'value', CXCL5:TNFa) 
+df.dataProt <- merge(df.dataProt_temp, df_data_allsel_cisSNPs_transSNPsNA, by.x='DonorId', by.y='DonorId')
+
+# genererate boxplot 
+   
+crit='rs1801274'  
+protein="IL2" 
+curr.stimulation = "CD3+CD28"
+   
+   data=df.dataProt %>% 
+     filter(StimulusName %in% curr.stimulation) %>% 
+     mutate(rs1801274 = relevel(as.factor(df.dataProt[df.dataProt$StimulusName==curr.stimulation,"rs1801274"]), ref="1")) %>% 
+     filter(Analyte %in% protein) #%>% 
+     
+         
+   pN <- ggplot(data = data, aes(x = as.factor(rs1801274) , y = value)) +
+     geom_boxplot() +
+     #facet_wrap(~Analyte, ncol=3, scale="free") +
+     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+     geom_boxplot(outlier.shape=NA) +
+     geom_jitter(alpha = 0.1, cex=0.8) +
+     theme_classic()+
+     xlab("rs1801274") +
+     ylab(paste0(protein," concentration (pg/ml)")) +
+     ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
+    
+pdf(paste0(pathRes,'/BoxplotIL2rs1801274_',Sys.Date(), '.pdf'))
+    
+print(pN)
+
+dev.off()
+
+``` 

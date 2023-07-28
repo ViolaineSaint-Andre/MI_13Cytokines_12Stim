@@ -1,6 +1,7 @@
 ---
 title: "Milieu Intérieur Project Cytokine data analysis"
 date: "2023-06-10"
+author: "Violaine Saint-André"
 
 ## License
 #  Milieu Intérieur Project Cytokine data analysis
@@ -43,7 +44,7 @@ pathRes <- "./RESULTS"
 ## Import covariates
 ```{r, results="hide"}
 
-df_data_all <- read.table(file="./df_data_all_137.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE) 
+df_data_all <- read.table(file="./TableS2.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE) 
 
 colnames(df_data_all)
 

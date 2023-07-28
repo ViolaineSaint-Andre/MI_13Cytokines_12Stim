@@ -81,7 +81,7 @@ colnames(df_counts)
 ## Import covariates
 ```{r, results="hide"}
 # on all selected variables
-df_data_all <- read.table(file="./df_data_all_137.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE) 
+df_data_all <- read.table(file="./TableS2.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE) 
 colnames(df_data_all)
 
 length(df_data_all) #137
