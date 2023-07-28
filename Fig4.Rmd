@@ -1,0 +1,640 @@
+---
+title: "Milieu Intérieur Project: Cytokine Data Analysis"
+date: "2023-06-10"
+author: "Violaine Saint-André"
+
+## License
+#  Milieu Intérieur Project: Cytokine Data Analysis
+#     Copyright (C) 2023  Violaine Saint-André
+#     contact: violaine.saint-andre@pasteur.fr
+# 
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+##
+---
+
+## Set parameters and import libraries
+```{r, results="hide"}
+
+# import libraries
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggsignif)
+library(ggpubr)
+library(cowplot)
+library(gridExtra)
+
+pathRes <- "./RESULTS"
+```
+
+## Import proteomic matrix
+
+```{r, results="hide"}
+df.data <- read.table(file="./TableS1.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+
+# remove the donors that have been reprocessed
+  # adding 302 as it is missing values for LPS 
+  # removed 883 who removed consent for everything
+df.data.v1 <- df.data %>% 
+  filter(!(DonorId %in% c(96, 104,	122,	167,	178,	219,	268,	279,	303,	308,	534,	701, 302, 883))) 
+
+dta <- df.data.v1[,c(1,2:ncol(df.data.v1))]
+
+# log transformation
+dta.log <- dta
+dta.log[,4:ncol(dta)] <- log(dta[,4:ncol(dta)])
+dataProt <- dta.log
+
+head(dataProt)
+
+```
+
+## Upload covariates
+```{r, results="hide"}
+
+# on all selected variables
+df_data_all <- read.table(file="./df_data_all_137.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE) 
+colnames(df_data_all)
+
+#df_data_all <- df_data_all %>% dplyr::select(-c("AGE.V0","AGE","SEX", "BATCHID"))
+
+length(df_data_all) #137
+df_data_all133names <- colnames(df_data_all)
+
+# set categorical and numerical variables
+col_names_cat <- list()
+col_names_num <- list()
+
+#df_datavar <- read.table(file = "./Variable_trans_mod.csv",
+#                           sep = ";",
+#                           dec = ",",
+#                           header = TRUE,
+#                           fill = TRUE,
+#                           stringsAsFactors = FALSE)
+#df_datavarShort <- df_datavar[,c("VARIABLE","VAR.DESC", "VAR.VAL","Value", "CATEGORY")]
+
+#df_datavarShort <- df_datavarShort[df_datavarShort$VARIABLE %in% names(df_data_all),]
+#dim(df_datavarShort) 
+#write.table(as.data.frame(df_datavarShort),paste("./df_datavarShort.txt"),  quote=F, row.names = F, sep="\t")
+
+df_datavar <- read.table(file = "./df_datavarShort.txt",
+                         sep = "\t",
+                         dec = ",",
+                         header = TRUE,
+                         fill = TRUE,
+                         stringsAsFactors = FALSE)
+
+df_datavar_cat <- df_datavar %>% filter(CATEGORY %in% c("cat"))
+df_datavar_num <- df_datavar %>% filter(CATEGORY %in% c("num"))
+df_datavar_all <- df_datavar %>% filter(CATEGORY %in% c("cat", "num", "likert"))
+
+curr_col_names_cat <- intersect(df_datavar_cat$VARIABLE, names(df_data_all))
+curr_col_names_num <- intersect(df_datavar_num$VARIABLE, names(df_data_all))
+curr_col_names_all <- intersect(df_datavar_all$VARIABLE, names(df_data_all))
+
+# transform numerical data into numeric  
+df_data_all[,curr_col_names_num] <- apply(df_data_all[,curr_col_names_num, drop=F],2, function(x) as.numeric(gsub(",", ".", as.character(x))))
+df_data_all[,curr_col_names_cat] <- apply(df_data_all[,curr_col_names_cat, drop=F],2, function(x) as.character(x))
+
+col_names_cat <-c(col_names_cat, curr_col_names_cat)
+col_names_num <-c(col_names_num, curr_col_names_num)
+```
+
+## Upload methylation data
+```{r, results="hide"}
+
+direct <- readRDS("./MIMETH_mvalues_direct_smoke.rds")
+direct <- as.data.frame(direct)
+tab_cg05575921 <- direct[, c("SUBJID", "cg05575921")]
+tab_cg05575921_merged <- merge(df_data_all, tab_cg05575921, by.x="SUBJID", by.y="SUBJID")
+tab_direct_dfdataall_merged <- merge(df_data_all, direct, by.x="SUBJID", by.y="SUBJID")
+tab_direct_dataProt_merged <- merge(dataProt, direct, by.x="DonorId", by.y="SUBJID")
+
+cyto_values_selec_tabac <- merge(direct,df_data_all[, c("SUBJID","TABAC.T1") ],by.x="SUBJID", by.y="SUBJID" )
+cyto_values_selec_smokers <- cyto_values_selec_tabac[cyto_values_selec_tabac$TABAC.T1=="2",]
+cyto_values_selec_past_smokers <- cyto_values_selec_tabac[cyto_values_selec_tabac$TABAC.T1=="1",]
+cyto_values_selec_past_non_smokers <- cyto_values_selec_tabac[cyto_values_selec_tabac$TABAC.T1=="0",]
+  
+```
+
+
+## Boxplots and scatterplots
+```{r, warning=FALSE, results="hide"}
+tab_direct_dfdataall_merged$TABAC.T1 <- as.factor(tab_direct_dfdataall_merged$TABAC.T1)
+tab_direct_dfdataall_merged$Smoking[tab_direct_dfdataall_merged$TABAC.T1=='0'] <- 'Never'
+tab_direct_dfdataall_merged$Smoking[tab_direct_dfdataall_merged$TABAC.T1=='1'] <- 'Past'
+tab_direct_dfdataall_merged$Smoking[tab_direct_dfdataall_merged$TABAC.T1=='2'] <- 'Current'
+
+Past <- tab_direct_dfdataall_merged[tab_direct_dfdataall_merged$TABAC.T1=='1',]
+Current <- tab_direct_dfdataall_merged[tab_direct_dfdataall_merged$TABAC.T1=='2',]
+
+#### AHRR 
+crit='Smoking'
+probe= 'cg05575921'
+gene= 'AHRR' 
+
+# to put the levels in the desired order
+tab_direct_dfdataall_merged$Smoking <- factor(tab_direct_dfdataall_merged$Smoking, levels = c("Never","Past", "Current"))
+
+boxplot1 <- ggplot(data=tab_direct_dfdataall_merged , 
+                   aes_string(x=crit, y=tab_direct_dfdataall_merged$cg05575921 
+                             )) + # fill = as.factor(tab_direct_dfdataall_merged$Smoking)
+  #geom_violin() + 
+  geom_boxplot(outlier.shape=NA) +
+  geom_jitter(alpha = 0.1) +
+  #scale_fill_manual(values=c( "#00BA38", "#619CFF", "#F8766D"))+
+  theme_classic()+
+  geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE, textsize=4) +
+  ylab(paste0("AHRR\n", probe, " (5mC levels)")) +
+  xlab("") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=14), plot.title = element_text(hjust = 0.5, face="bold"), legend.position = "none")+
+  ggtitle("Smoking status")
+
+write.table(as.data.frame(tab_direct_dfdataall_merged$cg05575921), file=paste0(pathRes,"/Fig4_AHRR_", Sys.Date(),".txt"), quote=F, row.names = F, col.names = T, sep="\t")
+
+
+scatter1 <- ggscatter(Current, x = 'NBYTABAC', y = "cg05575921",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE,
+                      xlab="",
+                      ylab="",
+                      title="Nb. years smoking",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 7, size= 5) + # Add correlation coefficient
+  theme(plot.title=element_text(hjust=0.5, face="bold"))
+
+
+scatter2 <- ggscatter(Past, x = "TOTNROFCIGS", y = "cg05575921",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab="",
+                      ylab="",
+                      title="Tot. nb. cig.",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 7, size= 5) + # Add correlation coefficient
+  theme(plot.title=element_text(hjust=0.5, face="bold"))
+
+scatter3 <- ggscatter(Past, x = "NBYLTABAC", y = "cg05575921",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab="",
+                      ylab="",
+                      title ="Nb. years since last smoke",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson",  label.x = 3, label.y = 7 ,size= 5) + # Add correlation coefficient
+  theme(plot.title=element_text(hjust=0.5, face="bold"))
+  
+scatter4 <- ggscatter(tab_direct_dataProt_merged[tab_direct_dataProt_merged$StimulusName=="SEB",], x = "IL2", y = "cg05575921",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab= "",
+                      ylab="",
+                      title ="IL2 (log pg/ml)",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 7, size= 5) + # Add correlation coefficient
+  theme(plot.title=element_text(hjust=0.5, face="bold"))
+ 
+
+
+#ggsave(filename=paste0(pathRes,"/PlotsForFig4_", gene, "_", probe, "_",  Sys.Date(), '.pdf'), arrangeGrob(boxplot1,scatter1, scatter2, scatter3))
+
+
+
+# crit='Smoking'
+# probe= 'cg05934812'
+# gene= 'AHRR' 
+# 
+# 
+# ggplot(data=tab_direct_dfdataall_merged ,
+#        aes_string(x=crit, y=tab_direct_dfdataall_merged$cg05934812, 
+#    fill = as.factor(tab_direct_dfdataall_merged$Smoking))) + 
+#   geom_violin() + 
+#   scale_fill_manual(values=c( "#00BA38", "#619CFF", "#F8766D"))+
+#   geom_boxplot(outlier.shape=NA) +
+#   #geom_jitter(alpha = 0.1) +
+#   theme_classic()+
+#   geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE) +
+#  ylab(paste0(probe, " (5mC levels)")) +
+#   xlab("") +
+#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+#   
+# 
+# crit='Smoking'
+# probe= 'cg21161138'
+# gene= 'AHRR' 
+# 
+# ggplot(data=tab_direct_dfdataall_merged ,
+#        aes_string(x=crit, y=tab_direct_dfdataall_merged$cg21161138)) + 
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_jitter(alpha = 0.1) +
+#   theme_classic()+
+#   geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE) +
+#  ylab(paste0(probe, " (5mC levels)")) +
+#   xlab("") +
+#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+# 
+#   
+# 
+# crit='Smoking'
+# probe= 'cg25648203'
+# gene= 'AHRR' 
+# 
+# ggplot(data=tab_direct_dfdataall_merged ,
+#        aes_string(x=crit, y=tab_direct_dfdataall_merged$cg25648203)) + 
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_jitter(alpha = 0.1) +
+#   theme_classic()+
+#   geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE) +
+#   ylab(paste0(probe, " (5mC levels)")) +
+#   xlab("") +
+#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+#  
+
+
+#### F2RL3
+crit='Smoking'
+probe= 'cg03636183'
+gene= 'F2RL3' 
+
+boxplot2 <- ggplot(data=tab_direct_dfdataall_merged ,
+       aes_string(x=crit, y=tab_direct_dfdataall_merged$cg03636183)) + 
+  #geom_violin() + 
+  #scale_fill_manual(values=c( "#00BA38", "#619CFF", "#F8766D"))+
+  geom_boxplot(outlier.shape=NA) +
+  geom_jitter(alpha = 0.1) +
+  theme_classic()+
+  geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE, textsize=4) +
+  ylab(paste0("F2RL3\n",probe, " (5mC levels)")) +
+  xlab("") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=14), plot.title = element_text(hjust = 0.5), legend.position = "none") 
+
+write.table(as.data.frame(tab_direct_dfdataall_merged$cg03636183), file=paste0(pathRes,"/Fig4_F2RL3_", Sys.Date(),".txt"), quote=F, row.names = F, col.names = T, sep="\t") 
+
+scatter5 <- ggscatter(Current, x = 'NBYTABAC', y = "cg03636183",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab="",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 3, size= 5)  # Add correlation coefficient
+
+
+scatter6 <- ggscatter(Past, x = "TOTNROFCIGS", y = "cg03636183",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab="",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 3, size= 5)  # Add correlation coefficient
+
+scatter7 <- ggscatter(Past, x = "NBYLTABAC", y = "cg03636183",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab="",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 3, size= 5)  # Add correlation coefficient
+
+scatter8 <- ggscatter(tab_direct_dataProt_merged[tab_direct_dataProt_merged$StimulusName=="SEB",], x = "IL2", y = "cg03636183",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab= "",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 3, size= 5)  # Add correlation coefficient 
+
+#ggsave(filename=paste0(pathRes,"/PlotsForFig4_", gene, "_", probe, "_",  Sys.Date(), '.pdf'), arrangeGrob(boxplot1,scatter1, scatter2, scatter3))
+
+
+
+#### GPR15
+crit='Smoking'
+probe= 'cg19859270'
+gene= 'GPR15' 
+
+boxplot3 <- ggplot(data=tab_direct_dfdataall_merged ,
+       aes_string(x=crit, y=tab_direct_dfdataall_merged$cg19859270)) + 
+  #geom_violin() + 
+  #scale_fill_manual(values=c( "#00BA38", "#619CFF", "#F8766D"))+
+  geom_boxplot(outlier.shape=NA) +
+  geom_jitter(alpha = 0.1) +
+  theme_classic()+
+  geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE, textsize=4) +
+  ylab(paste0("GPR15\n",probe, " (5mC levels)")) +
+  xlab("") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=14), plot.title = element_text(hjust = 0.5), legend.position = "none") 
+  
+write.table(as.data.frame(tab_direct_dfdataall_merged$cg19859270), file=paste0(pathRes,"/Fig4_GPR15_", Sys.Date(),".txt"), quote=F, row.names = F, col.names = T, sep="\t")  
+
+scatter9 <- ggscatter(Current, x = 'NBYTABAC', y = "cg19859270",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab="",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 6, size= 5)  # Add correlation coefficient
+
+
+scatter10 <- ggscatter(Past, x = "TOTNROFCIGS", y = "cg19859270",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab="",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 6, size= 5)  # Add correlation coefficient
+
+scatter11 <- ggscatter(Past, x = "NBYLTABAC", y = "cg19859270",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab="",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 6, size= 5)  # Add correlation coefficient
+
+scatter12 <- ggscatter(tab_direct_dataProt_merged[tab_direct_dataProt_merged$StimulusName=="SEB",], x = "IL2", y = "cg19859270",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab= "",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 6, size= 5)  # Add correlation coefficient
+
+
+#ggsave(filename=paste0(pathRes, "/PlotsForFig4_", gene, "_", probe, "_",  Sys.Date(), '.pdf'), arrangeGrob(boxplot1,scatter1, scatter2, scatter3))
+
+
+
+#### RARA
+crit='Smoking'
+probe= 'cg17739917'
+gene= 'RARA' 
+
+boxplot4 <- ggplot(data=tab_direct_dfdataall_merged ,
+       aes_string(x=crit, y=tab_direct_dfdataall_merged$cg17739917)) + 
+  #geom_violin() + 
+  #scale_fill_manual(values=c( "#00BA38", "#619CFF", "#F8766D"))+
+  geom_boxplot(outlier.shape=NA) +
+  geom_jitter(alpha = 0.1) +
+  theme_classic()+
+  geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE, textsize=4) +
+  ylab(paste0("RARA\n",probe, " (5mC levels)")) +
+  xlab("") +
+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=14), plot.title = element_text(hjust = 0.5), legend.position = "none") 
+
+write.table(as.data.frame(tab_direct_dfdataall_merged$cg17739917), file=paste0(pathRes,"/Fig4_RARA_", Sys.Date(),".txt"), quote=F, row.names = F, col.names = T, sep="\t")  
+  
+
+scatter13 <- ggscatter(Current, x = 'NBYTABAC', y = "cg17739917",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE,
+                      xlab="",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 2, size= 5)  # Add correlation coefficient
+
+
+scatter14 <- ggscatter(Past, x = "TOTNROFCIGS", y = "cg17739917",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab="",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 2, size= 5)  # Add correlation coefficient
+
+scatter15 <- ggscatter(Past, x = "NBYLTABAC", y = "cg17739917",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE,
+                      xlab="",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 2, size= 5)  # Add correlation coefficient
+
+scatter16 <- ggscatter(tab_direct_dataProt_merged[tab_direct_dataProt_merged$StimulusName=="SEB",], x = "IL2", y = "cg17739917",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab= "",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 2, size= 5)  # Add correlation coefficient
+
+
+#ggsave(filename=paste0(pathRes, "/PlotsForFig4_", gene, "_", probe, "_",  Sys.Date(), '.pdf'), arrangeGrob(boxplot1,scatter1, scatter2, scatter3))
+
+
+
+# crit='Smoking'
+# probe= 'cg19572487 '
+# gene= 'RARA' 
+# 
+# 
+# ggplot(data=tab_direct_dfdataall_merged ,
+#        aes_string(x=crit, y=tab_direct_dfdataall_merged$cg19572487 )) + 
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_jitter(alpha = 0.1) +
+#   theme_classic()+
+#   geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE) +
+#   ylab(paste0(probe, " (5mC levels)")) +
+#   xlab("") +
+#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+#   
+# 
+
+### PRSS23
+probe= 'cg14391737'
+gene= 'PRSS23' 
+crit='Smoking'
+
+boxplot5 <- ggplot(data=tab_direct_dfdataall_merged , 
+       aes_string(x=crit, y=tab_direct_dfdataall_merged$cg14391737)) + 
+  #geom_violin() + 
+  #scale_fill_manual(values=c( "#00BA38", "#619CFF", "#F8766D"))+
+  geom_boxplot(outlier.shape=NA) +
+  geom_jitter(alpha = 0.1) +
+  theme_classic()+
+  geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE, textsize=4) +
+ ylab(paste0("PRSS23\n", probe, " (5mC levels)")) +
+  xlab("") +
+  ylim(-2, 1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=14), plot.title = element_text(hjust = 0.5), legend.position = "none") 
+  
+write.table(as.data.frame(tab_direct_dfdataall_merged$cg14391737), file=paste0(pathRes,"/Fig4_PRSS23_", Sys.Date(),".txt"), quote=F, row.names = F, col.names = T, sep="\t")  
+
+scatter17 <- ggscatter(Current, x = 'NBYTABAC', y = "cg14391737",  
+          color= "grey",
+          shape=20,
+          add = "reg.line", 
+          conf.int = TRUE,
+          xlab="",
+          ylab="",
+          add.params = list(color = "blue",
+                            fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 2, size= 5)  # Add correlation coefficient
+
+
+scatter18 <- ggscatter(Past, x = "TOTNROFCIGS", y = "cg14391737",  
+          color= "grey",
+          shape=20,
+          add = "reg.line",                                 # Add regression line
+          conf.int = TRUE, 
+          xlab="",
+          ylab="",
+          add.params = list(color = "blue",
+                            fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 2, size= 5)  # Add correlation coefficient
+
+scatter19 <- ggscatter(Past, x = "NBYLTABAC", y = "cg14391737",  
+          color= "grey",
+          shape=20,
+          add = "reg.line",                                 # Add regression line
+          conf.int = TRUE, 
+          xlab="",
+          ylab="",
+          add.params = list(color = "blue",
+                            fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 2, size= 5)  # Add correlation coefficient
+
+scatter20 <- ggscatter(tab_direct_dataProt_merged[tab_direct_dataProt_merged$StimulusName=="SEB",], x = "IL2", y = "cg14391737",  
+                      color= "grey",
+                      shape=20,
+                      add = "reg.line",                                 # Add regression line
+                      conf.int = TRUE, 
+                      xlab= "",
+                      ylab="",
+                      add.params = list(color = "blue",
+                                        fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 2, size= 5)  # Add correlation coefficient
+
+#ggsave(filename=paste0(pathRes,"/PlotsForFig4_", gene, "_", probe, "_",  Sys.Date(), '.pdf'), arrangeGrob(boxplot1,scatter1, scatter2, scatter3), width=8, height=8)
+
+
+# #### Unanotated
+# crit='Smoking'
+# probe= 'cg01940273'
+# gene= 'Unannotated' 
+# 
+# ggplot(data=tab_direct_dfdataall_merged ,
+#        aes_string(x=crit, y=tab_direct_dfdataall_merged$cg01940273)) + 
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_jitter(alpha = 0.1) +
+#   theme_classic()+
+#   geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE) +
+#   ylab(paste0(probe, " (5mC levels)")) +
+#   xlab("") +
+#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+#   
+# 
+# crit='Smoking'
+# probe= 'cg27537125'
+# gene= 'Unannotated' 
+# 
+# ggplot(data=tab_direct_dfdataall_merged ,
+#        aes_string(x=crit, y=tab_direct_dfdataall_merged$cg27537125)) +
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_jitter(alpha = 0.1) +
+#   theme_classic()+
+#   geom_signif( comparisons = list(c("Never", "Past"), c("Past", "Current"), c("Never","Current")), test = "wilcox.test", map_signif_level=TRUE) +
+#   ylab(paste0(probe, " (5mC levels)")) +
+#   xlab("") +
+#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+#   
+
+# plot all
+pdf(paste0(pathRes,"/PlotsForFig4_All_", Sys.Date(), '.pdf'), width=17, height=22)
+
+plots <- plot_grid(boxplot1, scatter1, scatter2, scatter3, scatter4,
+                   boxplot2, scatter5, scatter6, scatter7,scatter8,
+                   boxplot3, scatter9, scatter10, scatter11,scatter12,
+                   boxplot4, scatter13, scatter14, scatter15,scatter16,
+                   boxplot5, scatter17, scatter18, scatter19,scatter20,
+                       nrow = 5, ncol = 5,  
+                       align = "vh", # Aligne vertical (v) et horizontal (h)
+                       axis = "lb") # Selon les axes de left (l) et du bottom (b)
+print(plots) 
+
+dev.off()
+
+# save session info and environment
+#packagesVersions <- sessionInfo()
+#save.image(file=paste0('./MethylationVsSmoking_', Sys.Date(), '.RData'))
+
+```
+

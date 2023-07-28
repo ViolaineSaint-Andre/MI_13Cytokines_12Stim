@@ -1,0 +1,173 @@
+---
+title: "Milieu Intérieur Project Cytokine data analysis"
+date: "2023-06-10"
+
+## License
+#  Milieu Intérieur Project Cytokine data analysis
+#     Copyright (C) 2023  Violaine Saint-André
+#     contact: violaine.saint-andre@pasteur.fr
+# 
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+##
+---
+
+## Set parameters and import libraries
+```{r, results="hide"}
+
+# import libraries
+library('foreach')
+library('heatmaply')
+library('dendextend')
+
+# set path for results
+pathRes="./RESULTS"
+
+```
+
+## Upload the luminex proteomic data
+```{r, results="hide"}
+
+# import the table
+df.data <- read.table(file="./TableS1.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+
+# remove the donors that have been reprocessed
+df.data.v1 <- df.data %>% 
+  # adding 302 for now as it is missing values for LPS 
+  # removed 883 who removed consent for everything
+  filter(!(DonorId %in% c(96, 104,	122,	167,	178,	219,	268,	279,	303,	308,	534,	701, 302, 883))) 
+
+# selection of columns
+dta <- df.data.v1[,c(1,2:ncol(df.data.v1))]
+
+# log transformation
+dta.log <- dta
+dta.log[,4:ncol(dta)] <- log(dta[,4:ncol(dta)])
+dataProt <- dta.log
+
+# check table
+head(dataProt)
+
+
+```
+
+
+## Compute standardized log mean difference
+```{r, results="hide"}
+
+sd <- as.data.frame(matrix(0, ncol = 0, nrow = 0))
+dta_Null <- dta.log[dta.log$StimulusName == "Null",][,4:16]
+
+stimuls <- c("IL1b", "IFNg", "TNFa","CD3+CD28", "PolyIC","LPS", "BCG", "C.albicans", "E.coli","Influenza", "SEB")
+
+allef <- foreach (stimul = stimuls, .combine = rbind) %do% {
+  print(stimul)
+  
+  if (stimul == "CD3+CD28"){
+    dta_CD3_CD28 <- dta.log[dta.log$StimulusName == "CD3+CD28",]
+    
+    # Separate data in 2 groups
+    dta_CD3_CD28num <- as.data.frame(apply(dta_CD3_CD28[, 4:16], 2, as.numeric), na.rm = T)
+    # Replace NAs by imputation
+    cl <- kmeans(Hmisc::impute(dta_CD3_CD28num), 2)
+    dta_CD3_CD28_grp1 <- dta_CD3_CD28[which(cl$cluster==1),]
+    dta_CD3_CD28_grp2 <- dta_CD3_CD28[which(cl$cluster==2),]
+    
+    # Then use the right group 
+    if (dim(dta_CD3_CD28_grp1)[1] ==705){
+      dta_other <- dta_CD3_CD28_grp2
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+    
+    else if (dim(dta_CD3_CD28_grp2)[1] ==705){
+      dta_other <- dta_CD3_CD28_grp1
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+    
+    dta_stim <- dta.log[dta.log$StimulusName == stimul,][,c(1,4:16)]
+    dta_stim[dta_stim$DonorId %in% dta_other$DonorId,] <- NA
+    dta_stim <- dta_stim[,-1]
+    
+    ef <- (mapply(x=as.data.frame(dta_stim), y = as.data.frame(dta_Null),
+                  FUN =  function(x,y) (mean(as.numeric(x), na.rm = T) - mean(as.numeric(y), na.rm = T))/
+                    sd(as.numeric(x) - as.numeric(y), na.rm = T)))
+    
+    return(ef)
+  }
+  
+  else {
+    dta_stim <- dta.log[dta.log$StimulusName == stimul,][,4:16]
+  
+    ef <- (mapply(x=as.data.frame(dta_stim), y = as.data.frame(dta_Null),
+                  FUN =  function(x,y) (mean(as.numeric(x), na.rm = T) - mean(as.numeric(y), na.rm = T))/
+                    sd(as.numeric(x) - as.numeric(y), na.rm = T) ))
+    
+    return(ef)
+  }
+}
+
+row.names(allef) <- stimuls
+colnames(allef) <- c('CXCL5', 'CSF2', 'IFNg', 'IL1b', 'IL2', 'IL6', 'IL8',  'IL10', 'IL12p70', 'IL13',  'IL17',  'IL23', 'TNFa')
+
+
+allefscale <- t(apply(allef, 2, scale))
+rownames(allefscale) <- colnames(allef)
+colnames(allefscale) <- rownames(allef)
+  
+melted_matSD <- melt(allefscale)
+
+write.table(allefscale, file = './TableSignatureHeatmapMeanDifferences.txt', 
+     sep='\t', col.names=T, row.names = T)
+
+```
+
+## Plot heatmap
+```{r, results="hide"}
+
+allefscale <- read.table('./TableSignatureHeatmapMeanDifferences.txt', sep='\t', header=T, row.names = 1)
+
+allefscale <- as.matrix(allefscale)
+
+colnames(allefscale) <- c("IL1b",      "IFNg",       "TNFa",       "CD3+CD28",   "PolyIC"  ,   "LPS"  ,      "BCG"    ,    "C.albicans" ,"E.coli"   ,  "Influenza" , "SEB") 
+
+allefscale2 <- allefscale[,c("SEB", "CD3+CD28", "E.coli","LPS", "C.albicans", "BCG", "PolyIC","Influenza","IFNg","TNFa","IL1b")]
+
+
+# customize dendrograms using dendextend
+col_dend  <- allefscale2 %>% 
+  t %>% 
+  dist %>% 
+  hclust %>% 
+  as.dendrogram %>%
+  rotate(as.character(c("SEB", "CD3+CD28", "E.coli","LPS", "C.albicans", "BCG", "PolyIC","Influenza","IFNg","TNFa","IL1b"))) %>%
+  rotate(11:1)  %>%
+  set("branches_k_color", k = 3, c("black","dark green", "dark blue")) 
+
+row_dend  <- allefscale2 %>% 
+  dist %>% 
+  hclust %>% 
+  as.dendrogram %>%
+  rotate(as.character(c("IL6", "IL1b",    "IL23" ,    "IL17",     "IL8",   "CXCL5","TNFa",  "IL10",  "IL13",   "CSF2","IL2", "IFNg", "IL12p70" )))
+
+  
+heatmaply(
+  allefscale2,
+  Rowv = row_dend,
+  Colv = col_dend, 
+)
+
+
+write.table(as.data.frame(allefscale2),paste0(pathRes,'/HeatmapProtExpValues_', Sys.Date(),'.txt'), quote=F, row.names = F, sep="\t")
+
+
+```

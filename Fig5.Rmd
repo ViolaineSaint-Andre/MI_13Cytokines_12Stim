@@ -1,0 +1,1331 @@
+---
+title: "Milieu Intérieur Project: Cytokine Data Analysis"
+date: "2023-06-10"
+author: "Violaine Saint-André"
+
+## License
+#  Milieu Intérieur Project: Cytokine Data Analysis
+#     Copyright (C) 2023  Violaine Saint-André
+#     contact: violaine.saint-andre@pasteur.fr
+# 
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+##
+---
+
+## Set parameters and import libraries
+```{r, results="hide"}
+
+# import Libraries
+library(tidyr)
+library(scales)
+library(reshape2)
+library(dplyr)
+library(plyr)
+library(ggplot2)
+library(sjstats)
+library(stringr)
+library(ggrepel)
+library(relaimpo)
+library(sva) 
+library(qvalue) 
+library(RColorBrewer)
+
+# set path for results
+pathRes <- "./RESULTS"
+
+```
+
+## Upload the luminex prot data
+```{r, results="hide"}
+df.data <- read.table(file="./TableS1.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+
+# remove the donors that have been reprocessed
+  # adding 302 as it is missing values for LPS 
+  # removed 883 who removed consent for everything
+df.data.v1 <- df.data %>% 
+  filter(!(DonorId %in% c(96, 104,	122,	167,	178,	219,	268,	279,	303,	308,	534,	701, 302, 883))) 
+
+dta <- df.data.v1[,c(1,2:ncol(df.data.v1))]
+
+# log transformation
+dta.log <- dta
+dta.log[,4:ncol(dta)] <- log(dta[,4:ncol(dta)])
+dataProt <- dta.log
+
+head(dataProt)
+
+```
+
+## Upload the cellular data
+```{r, results="hide"}
+
+# comptes non imputés
+df_counts <- read.table("./facs_counts_renamed.txt", header=TRUE, sep='\t', dec = ".", stringsAsFactors = FALSE)
+df_counts[,2:ncol(df_counts)] <- log(df_counts[ ,2:ncol(df_counts)]+1)  # still -Inf
+
+colnames(df_counts) <- sub('[.][^.]+$', '', colnames(df_counts))
+colnames(df_counts) <- sub('N_', '', colnames(df_counts))
+colnames(df_counts)
+
+```
+
+## Upload the variable Table
+```{r, results="hide"}
+df_data_all <- read.table(file="./df_data_all_137.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE) 
+colnames(df_data_all)
+
+df_data_all <- df_data_all %>% dplyr::select(-"BATCHID")
+
+df_data_allsel <- df_data_all[,c('SUBJID','AGE.V0', 'SEX', 'TABAC.T1','BMI.V0', 'CMV.V1')]
+colnames(df_data_allsel) <- c('SUBJID','AGE', 'SEX', 'SMOKING','BMI', 'CMV')
+
+cisSNPs <- read.table(file="./Geno_cisSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+
+df_data_allsel_cisSNPs <- merge(df_data_allsel, cisSNPs, by.x= "SUBJID", by.y="SUBJID")
+
+transSNPs <- read.table(file="./Geno_transSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+transSNPs <- transSNPs %>% dplyr::select(-c("rs352045", "rs143060887"))
+
+
+df_data_allsel_cisSNPs_transSNPs <- merge(df_data_allsel_cisSNPs, transSNPs, by.x= "SUBJID", by.y="SUBJID")
+
+
+methylationData <- load("./methylationData.RData")
+meth_data <- as.data.frame(meth)
+meth_data_select <- meth_data[, c("SUBJID","cg00721170", "cg03239976", "cg20524905", "cg11924517", "cg16468729", "cg09582880","cg16865138", "cg24274865", "cg25065535", "cg17850932")]
+df_data_allsel_cisSNPs_transSNPs_meQTLs <- merge(df_data_allsel_cisSNPs_transSNPs, meth_data_select, by.x= "SUBJID", by.y="SUBJID")
+
+df_data_allsel <- df_data_allsel_cisSNPs_transSNPs_meQTLs
+```
+
+# Remove batch effect
+```{r, results="hide"}
+ 
+#  # transformation BatchID as numeric
+#  dataProt$BatchId <-as.factor(dataProt$BatchId)
+#  batch <- as.numeric(dataProt$BatchId)
+#  
+#  # transposition  of the table to use ComBat
+#  T_dataProt_save <-as.data.frame(t(dataProt)) %>% mutate_all(as.character)
+#  
+#  T_dataProt <- T_dataProt_save
+#  
+#  T_dataProt[1:10,1:10] # indiv in columns
+#  T_dataProt[-1:-3, 1:10]
+#  
+#  mat <- matrix(unlist(T_dataProt[-1:-3, ]), nrow=13, ncol=11976)
+#  
+#  T_mat <- apply(mat, 1 , function(x) as.numeric(x)) 
+#  
+# # T_mat[1:10,1:10] # indiv in rows
+#  mat <- t(T_mat)
+# # mat[1:10,1:10] #indiv in columns
+# 
+#  T_dataProt[-1:-3,] <- ComBat(dat = mat, batch = batch, mod=NULL)
+#  
+# #Found2batches
+# #Adjusting for0covariate(s) or covariate level(s)
+# #Found577Missing Data Values 
+# #Standardizing Data across genes
+# #Fitting L/S model and finding priors
+# #Finding parametric adjustments
+# #Adjusting the Data
+#  
+#  rownames(T_dataProt) <- colnames(dataProt)
+# 
+#  T_dataProt[1:10,1:10]
+#  
+#  # Transpose the matrix
+#  dataProt_SB <-t(T_dataProt)
+# 
+#  # remove batchID column
+#  #dataProt_SB <- as.data.frame(dataProt_SB[,-2])
+# 
+#  # Convert in numeric and factor
+# dataProt_SB <- as.data.frame(dataProt_SB)
+# dataProt_SB$DonorId<- as.integer(dataProt_SB$DonorId)
+# dataProt_SB[,4:dim(dataProt_SB)[2]] <- apply(dataProt_SB[,4:dim(dataProt_SB)[2]],2, function(x) as.numeric(x))
+# 
+# dataProt <- as.data.frame(dataProt_SB)
+```
+
+
+# LPS
+```{r, results="hide"} 
+
+stimul ="LPS"
+print(paste0('stimul=',stimul))
+diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+
+#to work on expressed prot only
+dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+
+medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+id <- medianVal > log(1.3)
+protList <- colnames(dta_stim[4:16][,id])  
+
+curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+curr_dta[,1:3] <- dta_stim[,1:3]
+n <- length(protList)+3
+curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+dta_stimul <- curr_dta
+dta_stimul <- merge.data.frame(dta_stimul, df_counts, by.x = "DonorId", by.y = "SUBJID")
+
+DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+
+proba <- list()
+res <- list()
+res.lmg <- list()
+res.sum_sq <- list()
+sum_sq <- list()
+
+for (i in protList){
+  
+  #i="CXCL5"
+  
+  DF2 <- na.omit(DF[,c(i,'DonorId', 'AGE', 'SEX', 'SMOKING','BMI', 'CMV', 'mono', 'rs352045','rs143060887', "rs62449491", "rs1518110", "rs3764613", 'cg09582880')])
+
+  
+  DF2[,"Age"] <- DF2[,"AGE"]
+  DF2[,"Sex"] <- as.factor(DF2[,"SEX"])
+  DF2[,"Smoking"] <- as.factor(DF2[,"SMOKING"])
+  DF2[,"CMV"] <- as.factor(DF2[,"CMV"])
+  DF2[,"Cellular"] <- DF2[,"mono"]
+  DF2[,"cispQTL_1"] <- as.factor(DF2[,"rs352045"])
+  DF2[,"cispQTL_2"] <- as.factor(DF2[,"rs143060887"])
+  DF2[,"cispQTL_3"] <- as.factor(DF2[,"rs62449491"])
+  DF2[,"cispQTL_4"] <- as.factor(DF2[,"rs1518110"])
+  DF2[,"transpQTL"] <- as.factor(DF2[,"rs3764613"])
+  DF2[,"mepQTL"] <- DF2[,"cg09582880"]
+
+  
+  res[[i]] <- car::Anova(lm(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular + cispQTL_1 + cispQTL_2 + cispQTL_3 + cispQTL_4 + transpQTL + mepQTL,  
+                            data = DF2))
+  
+  res.lmg[[i]] <- calc.relimp(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular + cispQTL_1 + cispQTL_2 + cispQTL_3 + cispQTL_4 + transpQTL + mepQTL,
+                              DF2, type="lmg")
+  
+  # store proba 
+  proba[[i]] <- res[[i]][1:(ncol(DF2)-12),'Pr(>F)']
+  
+  # store sum_sq
+  sum_sq[[i]] <- as.list(res.lmg[[i]]$lmg)
+  
+  res.sum_sq[[i]] <- unlist(sum_sq[[i]])
+
+}
+
+proba_mat_stimul <- as.data.frame(proba)  
+
+# to adjust for each graph
+row.names(proba_mat_stimul) <- c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "cispQTLs_1", "cispQTL_2", "cispQTL_3", "cispQTL_4","transpQTL","mepQTL")
+
+# qvalues computation and filtering
+proba_mat_stimul_qvalues <- qvalue(proba_mat_stimul, pi0 = 1)$qvalue
+proba_mat_stimul_qvalues_select <- apply(proba_mat_stimul_qvalues,1, function (x) (x< 0.05))
+melted_proba_mat_stimul_select <- melt(t(proba_mat_stimul_qvalues_select))
+melted_proba_mat_stimul_select <- data.frame(rep(stimul, nrow(melted_proba_mat_stimul_select)), melted_proba_mat_stimul_select)
+colnames(melted_proba_mat_stimul_select)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_select_ini <- melted_proba_mat_stimul_select  # initiate with LPS
+colnames(melted_proba_mat_select_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_select_ini <- rbind(melted_proba_mat_select_ini, melted_proba_mat_stimul_select)
+
+melted_proba_stimul <- melt(as.matrix(proba_mat_stimul_qvalues))
+melted_proba_mat_stimul <- data.frame(rep(stimul, nrow(melted_proba_stimul)), melted_proba_stimul)
+colnames(melted_proba_mat_stimul)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_ini <- melted_proba_mat_stimul  # initier avec LPS
+colnames(melted_proba_mat_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_ini <- rbind(melted_proba_mat_ini, melted_proba_mat_stimul)
+
+sumsq_mat_stimul <- as.data.frame(res.sum_sq) 
+# to adjust to each graph
+sumsq_mat_stimul <-sumsq_mat_stimul[c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "cispQTL_1", "cispQTL_2", "cispQTL_3", "cispQTL_4","transpQTL","mepQTL"),]
+
+melted_sumsq_stimul <- melt(as.matrix(sumsq_mat_stimul))
+melted_sumsq_mat_stimul <- data.frame(rep(stimul, nrow(melted_sumsq_stimul)), melted_sumsq_stimul)
+colnames(melted_sumsq_mat_stimul)<- c("stim", "Var1", "Var2", "sumsq")
+melted_sumsq_mat_ini <- melted_sumsq_mat_stimul # initier avec LPS
+colnames(melted_sumsq_mat_ini) <- c("stim", "Var1", "Var2", "sumsq")
+
+AGE= "#2297E6" #bleu fonce
+SEX= "#61D04F" # vert 
+SMOKING= "black"# noir
+CMV= "#CD0BBC" #rose
+BMI = "#28E2E5" #bleuclair
+Cellular="#F5C710" #jaune
+cispQTL= "#DF536B"
+transpQTL="grey62" #gris
+meQTL='white' #blanc
+
+# signif values
+
+# reorder prot as previous
+sel <- melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),] 
+l <-as.character(unique(sel$Var2[order(as.character(sel$Var2))]))
+
+p_sumsq_signif <- ggplot(sel)  +
+  aes(x =  factor(sel$Var2, levels= l), y = sumsq, fill = Var1) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_x_discrete(name = "")+
+  scale_y_continuous(labels = percent, name = "")+
+  scale_fill_manual(values = c("#2297E6", "#61D04F","black", "#F5C710", "#DF536B", 
+                               "#DF536B","#DF536B","#DF536B", 'grey62'))+
+  coord_flip()+
+  theme_classic()+
+  facet_wrap(~stim, nrow=3, ncol=3, scale="free") + 
+  theme(legend.position = "bottom", axis.text.x = element_text(size = 10), axis.text.y = element_text(size = 10))+
+  labs(fill = "Factors")
+#ggtitle(paste(stimul,", Variance explained", sep="")) 
+ggsave(plot=p_sumsq_signif, filename = paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(), '.pdf'),height=4.2, width =3.5)
+
+p_sumsq_signif
+
+write.table(as.data.frame(melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),]),paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(),'_values.txt'), quote=F, row.names = F, sep="\t")
+
+melted_sumsq_mat_signif <- melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),]
+
+```
+
+# E.coli
+```{r, results="hide"} 
+
+stimul ="E.coli"
+print(paste0('stimul=',stimul))
+diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+
+# to work on expressed prot only
+dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+
+medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+id <- medianVal > log(1.3)
+protList <- colnames(dta_stim[4:16][,id])  
+
+curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+curr_dta[,1:3] <- dta_stim[,1:3]
+n <- length(protList)+3
+curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+dta_stimul <- curr_dta
+dta_stimul <- merge.data.frame(dta_stimul, df_counts, by.x = "DonorId", by.y = "SUBJID")
+
+DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+
+
+proba <- list()
+res <- list()
+res.lmg <- list()
+res.sum_sq <- list()
+sum_sq <- list()
+
+for (i in protList){
+  
+  #i="Cxcl5"
+  
+  DF2 <- na.omit(DF[,c(i,'DonorId', 'AGE', 'SEX', 'SMOKING','BMI', 'CMV', 'mono', 'rs4833095')])
+  
+  
+  DF2[,"Age"] <- DF2[,"AGE"]
+  DF2[,"Sex"] <- as.factor(DF2[,"SEX"])
+  DF2[,"Smoking"] <- as.factor(DF2[,"SMOKING"])
+  DF2[,"CMV"] <- as.factor(DF2[,"CMV"])
+  DF2[,"Cellular"] <- DF2[,"mono"]
+  #DF2[,"cispQTL_1"] <- as.factor(DF2[,"rs352045"])
+  #DF2[,"cispQTL_2"] <- as.factor(DF2[,"rs143060887"])
+  #DF2[,"cispQTL_3"] <- as.factor(DF2[,"rs62449491"])
+  #DF2[,"cispQTL_4"] <- as.factor(DF2[,"rs1518110"])
+  DF2[,"transpQTL"] <- as.factor(DF2[,'rs4833095'])
+  #DF2[,"mepQTL"] <- DF2[,"cg09582880"] 
+  
+ 
+  res[[i]] <- car::Anova(lm(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular +  transpQTL,  #Anova Table (Type II tests)
+                            data = DF2))
+  
+  res.lmg[[i]] <- calc.relimp(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular  + transpQTL,
+                              DF2, type="lmg")
+  
+  # store proba # adjust to each stim
+  proba[[i]] <- res[[i]][1:(ncol(DF2)-7),'Pr(>F)']
+  
+  # store sum_sq
+  sum_sq[[i]] <- as.list(res.lmg[[i]]$lmg)
+  
+  res.sum_sq[[i]] <- unlist(sum_sq[[i]])
+  
+}
+proba_mat_stimul <- as.data.frame(proba)  
+
+# to adjust for each graph
+row.names(proba_mat_stimul) <- c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "transpQTL")
+
+# qvalues computation and filtering
+proba_mat_stimul_qvalues <- qvalue(proba_mat_stimul, pi0 = 1)$qvalue
+proba_mat_stimul_qvalues_select <- apply(proba_mat_stimul_qvalues,1, function (x) (x< 0.05))
+#proba_mat_stimul_qvalues_select <- proba_mat_stimul_qvalues_select[,colSums(proba_mat_stimul_qvalues_select) >= 1]
+#colM <- colnames(matDATAselect)
+melted_proba_mat_stimul_select <- melt(t(proba_mat_stimul_qvalues_select))
+melted_proba_mat_stimul_select <- data.frame(rep(stimul, nrow(melted_proba_mat_stimul_select)), melted_proba_mat_stimul_select)
+colnames(melted_proba_mat_stimul_select)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_select_ini <- melted_proba_mat_stimul_select  # initier avec LPS
+colnames(melted_proba_mat_select_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_select_ini <- rbind(melted_proba_mat_select_ini, melted_proba_mat_stimul_select)
+
+melted_proba_stimul <- melt(as.matrix(proba_mat_stimul_qvalues))
+melted_proba_mat_stimul <- data.frame(rep(stimul, nrow(melted_proba_stimul)), melted_proba_stimul)
+colnames(melted_proba_mat_stimul)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_ini <- melted_proba_mat_stimul  # initier avec LPS
+colnames(melted_proba_mat_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_ini <- rbind(melted_proba_mat_ini, melted_proba_mat_stimul)
+
+sumsq_mat_stimul <- as.data.frame(res.sum_sq) 
+
+# to adjust to each graph
+sumsq_mat_stimul <-sumsq_mat_stimul[c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "transpQTL"),]
+
+melted_sumsq_stimul <- melt(as.matrix(sumsq_mat_stimul))
+melted_sumsq_mat_stimul <- data.frame(rep(stimul, nrow(melted_sumsq_stimul)), melted_sumsq_stimul)
+colnames(melted_sumsq_mat_stimul)<- c("stim", "Var1", "Var2", "sumsq")
+melted_sumsq_mat_ini <- melted_sumsq_mat_stimul # initier avec LPS
+colnames(melted_sumsq_mat_ini) <- c("stim", "Var1", "Var2", "sumsq")
+
+
+AGE= "#2297E6" #bleu fonce
+SEX= "#61D04F" # vert 
+SMOKING= "black"# noir
+CMV= "#CD0BBC" #rose
+BMI = "#28E2E5" #bleuclair
+Cellular="#F5C710" #jaune
+cispQTL= "#DF536B"
+transpQTL="grey62" #gris
+meQTL='white' #blanc
+
+# signif values
+sel <- melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),] 
+l <-as.character(unique(sel$Var2[order(as.character(sel$Var2))]))
+
+p_sumsq_signif <- ggplot(sel)  +
+  aes(x =  factor(sel$Var2, levels= l), y = sumsq, fill = Var1) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_x_discrete(name = "")+
+  scale_y_continuous(labels = percent, name = "")+
+  scale_fill_manual(values = c("#2297E6" ,"#61D04F", "black", "#28E2E5", "#F5C710", "grey62"))+
+  coord_flip()+
+  theme_classic()+
+  facet_wrap(~stim, nrow=3, ncol=3, scale="free") + 
+  theme(legend.position = "bottom", axis.text.x = element_text(size = 10), axis.text.y = element_text(size = 10))+
+  labs(fill = "Factors")
+#ggtitle(paste(stimul,", Variance explained", sep="")) 
+ggsave(plot=p_sumsq_signif, filename = paste0(pathRes, '/sumsq_signifQval0.05_', stimul, '_', Sys.Date(), '.pdf'), height= 4.2, width=3.5)
+p_sumsq_signif
+
+write.table(as.data.frame(melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),]),paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(),'_values.txt'), quote=F, row.names = F, sep="\t")
+
+melted_sumsq_mat_signif <- rbind(melted_sumsq_mat_signif, melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),])
+
+
+```
+
+# SEB
+```{r, results="hide"} 
+
+stimul ="SEB"
+print(paste0('stimul=',stimul))
+diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+
+# to work on expressed prot only
+dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+
+medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+id <- medianVal > log(1.3)
+protList <- colnames(dta_stim[4:16][,id])  
+
+curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+curr_dta[,1:3] <- dta_stim[,1:3]
+n <- length(protList)+3
+curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+dta_stimul <- curr_dta
+dta_stimul <- merge.data.frame(dta_stimul, df_counts, by.x = "DonorId", by.y = "SUBJID")
+
+DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+
+
+proba <- list()
+res <- list()
+res.lmg <- list()
+res.sum_sq <- list()
+sum_sq <- list()
+
+for (i in protList){
+  
+  #i="IL2"
+  
+  DF2 <- na.omit(DF[,c(i,'DonorId', 'AGE', 'SEX', 'SMOKING','BMI', 'CMV', 'CD4pos', 'rs11936050')])
+  
+  
+  DF2[,"Age"] <- DF2[,"AGE"]
+  DF2[,"Sex"] <- as.factor(DF2[,"SEX"])
+  DF2[,"Smoking"] <- as.factor(DF2[,"SMOKING"])
+  DF2[,"CMV"] <- as.factor(DF2[,"CMV"])
+  DF2[,"Cellular"] <- DF2[,"CD4pos"]
+  #DF2[,"cispQTL_1"] <- as.factor(DF2[,"rs352045"])
+  #DF2[,"cispQTL_2"] <- as.factor(DF2[,"rs143060887"])
+  #DF2[,"cispQTL_3"] <- as.factor(DF2[,"rs62449491"])
+  #DF2[,"cispQTL_4"] <- as.factor(DF2[,"rs1518110"])
+  DF2[,"transpQTL"] <- as.factor(DF2[,'rs11936050'])
+  #DF2[,"mepQTL"] <- DF2[,'cg00721170']
+  
+  
+  res[[i]] <- car::Anova(lm(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular + transpQTL ,  #Anova Table (Type II tests)
+                            data = DF2))
+  
+  res.lmg[[i]] <- calc.relimp(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular  + transpQTL ,
+                              DF2, type="lmg")
+  
+  # store proba
+  proba[[i]] <- res[[i]][1:(nrow(res[[i]])-1),'Pr(>F)']
+  
+  # store sum_sq
+  sum_sq[[i]] <- as.list(res.lmg[[i]]$lmg)
+  
+  res.sum_sq[[i]] <- unlist(sum_sq[[i]])
+
+  
+}
+
+proba_mat_stimul <- as.data.frame(proba)  
+
+# to adjust for each graph 
+row.names(proba_mat_stimul) <- c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "transpQTL")
+
+# qvalues computation and filtering
+proba_mat_stimul_qvalues <- qvalue(proba_mat_stimul, pi0 = 1)$qvalue
+proba_mat_stimul_qvalues_select <- apply(proba_mat_stimul_qvalues,1, function (x) (x< 0.05))
+#proba_mat_stimul_qvalues_select <- proba_mat_stimul_qvalues_select[,colSums(proba_mat_stimul_qvalues_select) >= 1]
+#colM <- colnames(matDATAselect)
+melted_proba_mat_stimul_select <- melt(t(proba_mat_stimul_qvalues_select))
+melted_proba_mat_stimul_select <- data.frame(rep(stimul, nrow(melted_proba_mat_stimul_select)), melted_proba_mat_stimul_select)
+colnames(melted_proba_mat_stimul_select)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_select_ini <- melted_proba_mat_stimul_select  # initiate with LPS
+colnames(melted_proba_mat_select_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_select_ini <- rbind(melted_proba_mat_select_ini, melted_proba_mat_stimul_select)
+
+melted_proba_stimul <- melt(as.matrix(proba_mat_stimul_qvalues))
+melted_proba_mat_stimul <- data.frame(rep(stimul, nrow(melted_proba_stimul)), melted_proba_stimul)
+colnames(melted_proba_mat_stimul)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_ini <- melted_proba_mat_stimul  # initier avec LPS
+colnames(melted_proba_mat_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_ini <- rbind(melted_proba_mat_ini, melted_proba_mat_stimul)
+sumsq_mat_stimul <- as.data.frame(res.sum_sq) 
+
+# to adjust to each graph 
+sumsq_mat_stimul <-sumsq_mat_stimul[c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "transpQTL"),]
+
+melted_sumsq_stimul <- melt(as.matrix(sumsq_mat_stimul))
+melted_sumsq_mat_stimul <- data.frame(rep(stimul, nrow(melted_sumsq_stimul)), melted_sumsq_stimul)
+colnames(melted_sumsq_mat_stimul)<- c("stim", "Var1", "Var2", "sumsq")
+melted_sumsq_mat_ini <- melted_sumsq_mat_stimul # initier avec LPS
+colnames(melted_sumsq_mat_ini) <- c("stim", "Var1", "Var2", "sumsq")
+
+
+AGE= "#2297E6" #bleu fonce
+SEX= "#61D04F" # vert 
+SMOKING= "black"# noir
+CMV= "#CD0BBC" #rose
+BMI = "#28E2E5" #bleuclair
+Cellular="#F5C710" #jaune
+cispQTL= "#DF536B"
+transpQTL="grey62" #gris
+meQTL='white' #blanc
+
+# signif values
+sel <- melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),] 
+l <-as.character(unique(sel$Var2[order(as.character(sel$Var2))]))
+
+p_sumsq_signif <- ggplot(sel)  +
+  aes(x =  factor(sel$Var2, levels= l), y = sumsq, fill = Var1) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_x_discrete("")+
+  scale_y_continuous(labels = percent, name = "")+
+  scale_fill_manual(values = c("#2297E6" , "black", "#28E2E5", "#CD0BBC", "#F5C710" , "grey62"))+
+  coord_flip()+
+  theme_classic()+
+  facet_wrap(~stim, nrow=3, ncol=3, scale="free") + 
+  theme(legend.position = "bottom", axis.text.x = element_text(size = 10), axis.text.y = element_text(size = 10))+
+  labs(fill = "Factors")
+#ggtitle(paste(stimul,", Variance explained", sep="")) 
+ggsave(plot=p_sumsq_signif, filename = paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(), '.pdf'), height= 4.2, width=3.5)
+p_sumsq_signif
+
+write.table(as.data.frame(melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),]),paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(),'_values.txt'), quote=F, row.names = F, sep="\t")
+
+melted_sumsq_mat_signif <- rbind(melted_sumsq_mat_signif, melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),])
+
+```
+
+# BCG
+```{r, results="hide"} 
+
+stimul='BCG'
+print(paste0('stimul=',stimul))
+diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+
+# to work on expressed prot only
+dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+
+medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+id <- medianVal > log(1.3)
+
+protList <- colnames(dta_stim[4:16][,id])  
+
+curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+curr_dta[,1:3] <- dta_stim[,1:3]
+n <- length(protList)+3
+curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+dta_stimul <- curr_dta
+dta_stimul <- merge.data.frame(dta_stimul, df_counts, by.x = "DonorId", by.y = "SUBJID")
+
+DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+
+
+proba <- list()
+res <- list()
+res.lmg <- list()
+res.sum_sq <- list()
+sum_sq <- list()
+
+for (i in protList){
+  
+  #i="Cxcl5"
+  
+  DF2 <- na.omit(DF[,c(i,'DonorId', 'AGE', 'SEX', 'SMOKING','BMI', 'CMV', 'CD45pos', 'rs4833095', 'rs72636686', 'rs10013453' )])
+  
+  DF2[,"Age"] <- DF2[,"AGE"]
+  DF2[,"Sex"] <- as.factor(DF2[,"SEX"])
+  DF2[,"Smoking"] <- as.factor(DF2[,"SMOKING"])
+  DF2[,"CMV"] <- as.factor(DF2[,"CMV"])
+  DF2[,"Cellular"] <- DF2[,"CD45pos"]
+  #DF2[,"cispQTL"] <- as.factor(DF2[,"rs352045"])
+  #DF2[,"cispQTL_2"] <- as.factor(DF2[,"rs143060887"])
+  #DF2[,"cispQTL_3"] <- as.factor(DF2[,"rs62449491"])
+  #DF2[,"cispQTL_4"] <- as.factor(DF2[,"rs1518110"])
+  DF2[,"transpQTL_1"] <- as.factor(DF2[,'rs4833095'])
+  DF2[,"transpQTL_2"] <- as.factor(DF2[,'rs72636686'])
+  DF2[,"transpQTL_3"] <- as.factor(DF2[,'rs10013453'])
+  #DF2[,"mepQTL"] <- DF2[,'cg03239976']
+  
+  
+  # adjust for each stim
+  res[[i]] <- car::Anova(lm(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular +  transpQTL_1 + transpQTL_2 + transpQTL_3,  #Anova Table (Type II tests)
+                            data = DF2))
+  
+  res.lmg[[i]] <- calc.relimp(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular + transpQTL_1 + transpQTL_2 + transpQTL_3,
+                              DF2, type="lmg")
+  
+  # store proba
+  proba[[i]] <- res[[i]][1:(nrow(res[[i]])-1),'Pr(>F)']
+  
+  # store sum_sq
+  sum_sq[[i]] <- as.list(res.lmg[[i]]$lmg)
+  
+  res.sum_sq[[i]] <- unlist(sum_sq[[i]])
+  
+  
+}
+
+proba_mat_stimul <- as.data.frame(proba)  
+
+# to adjust for each graph 
+row.names(proba_mat_stimul) <- c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "transpQTL_1", "transpQTL_2","transpQTL_3")
+
+# qvalues computation and filtering
+proba_mat_stimul_qvalues <- qvalue(proba_mat_stimul, pi0 = 1)$qvalue
+proba_mat_stimul_qvalues_select <- apply(proba_mat_stimul_qvalues,1, function (x) (x< 0.05))
+#proba_mat_stimul_qvalues_select <- proba_mat_stimul_qvalues_select[,colSums(proba_mat_stimul_qvalues_select) >= 1]
+#colM <- colnames(matDATAselect)
+melted_proba_mat_stimul_select <- melt(t(proba_mat_stimul_qvalues_select))
+melted_proba_mat_stimul_select <- data.frame(rep(stimul, nrow(melted_proba_mat_stimul_select)), melted_proba_mat_stimul_select)
+colnames(melted_proba_mat_stimul_select)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_select_ini <- melted_proba_mat_stimul_select  # initiate with LPS
+colnames(melted_proba_mat_select_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_select_ini <- rbind(melted_proba_mat_select_ini, melted_proba_mat_stimul_select)
+
+melted_proba_stimul <- melt(as.matrix(proba_mat_stimul_qvalues))
+melted_proba_mat_stimul <- data.frame(rep(stimul, nrow(melted_proba_stimul)), melted_proba_stimul)
+colnames(melted_proba_mat_stimul)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_ini <- melted_proba_mat_stimul  # initier avec LPS
+colnames(melted_proba_mat_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_ini <- rbind(melted_proba_mat_ini, melted_proba_mat_stimul)
+
+sumsq_mat_stimul <- as.data.frame(res.sum_sq) 
+
+# to adjust to each graph
+sumsq_mat_stimul <-sumsq_mat_stimul[c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular",  "transpQTL_1", "transpQTL_2","transpQTL_3"),]
+
+melted_sumsq_stimul <- melt(as.matrix(sumsq_mat_stimul))
+melted_sumsq_mat_stimul <- data.frame(rep(stimul, nrow(melted_sumsq_stimul)), melted_sumsq_stimul)
+colnames(melted_sumsq_mat_stimul)<- c("stim", "Var1", "Var2", "sumsq")
+melted_sumsq_mat_ini <- melted_sumsq_mat_stimul # initier avec LPS
+colnames(melted_sumsq_mat_ini) <- c("stim", "Var1", "Var2", "sumsq")
+#melted_sumsq_mat_ini <- rbind(melted_sumsq_mat_ini, melted_sumsq_mat_stimul)
+
+AGE= "#2297E6" #bleu fonce
+SEX= "#61D04F" # vert 
+SMOKING= "black"# noir
+CMV= "#CD0BBC" #rose
+BMI = "#28E2E5" #bleuclair
+Cellular="#F5C710" #jaune
+cispQTL= "#DF536B"
+transpQTL="grey62" #gris
+meQTL='white' #blanc
+
+# signif values
+sel <- melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),] 
+l <-as.character(unique(sel$Var2[order(as.character(sel$Var2))]))
+
+p_sumsq_signif <- ggplot(sel)  +
+  aes(x =  factor(sel$Var2, levels= l), y = sumsq, fill = Var1) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_x_discrete("")+
+  scale_y_continuous(labels = percent, name="")+
+  scale_fill_manual(values = c("#2297E6" ,"#61D04F", "black", "#28E2E5", "#CD0BBC","#F5C710",  "grey62","grey62"))+
+  coord_flip()+
+  theme_classic()+
+  facet_wrap(~stim, nrow=3, ncol=3, scale="free") + 
+  theme(legend.position = "bottom", axis.text.x = element_text(size = 10), axis.text.y = element_text(size = 10))+
+  labs(fill = "Factors")
+#ggtitle(paste(stimul,", Variance explained", sep="")) 
+ggsave(plot=p_sumsq_signif, filename = paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(), '.pdf'), height= 4.2, width=3.5)
+p_sumsq_signif
+
+write.table(as.data.frame(melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),]),paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(),'_values.txt'), quote=F, row.names = F, sep="\t")
+
+melted_sumsq_mat_signif <- rbind(melted_sumsq_mat_signif, melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),])
+
+```
+
+# CD3+CD28
+```{r, results="hide"} 
+# CD3+CD28
+stimul ="CD3+CD28"
+print(paste0('stimul=',stimul))
+diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+  
+   dta_CD3_CD28 <- dataProt[dataProt$StimulusName == "CD3+CD28",]
+    
+    # separate data in 2 groups
+    dta_CD3_CD28num <- as.data.frame(apply(dta_CD3_CD28[, 4:16], 2, as.numeric), na.rm = T)
+    # replace NAs by imputation
+    cl <- kmeans(Hmisc::impute(dta_CD3_CD28num), 2)
+    dta_CD3_CD28_grp1 <- dta_CD3_CD28[which(cl$cluster==1),]
+    dta_CD3_CD28_grp2 <- dta_CD3_CD28[which(cl$cluster==2),]
+    
+    # then use the right group 
+    if (dim(dta_CD3_CD28_grp1)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp1
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }else if (dim(dta_CD3_CD28_grp2)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp2
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+  
+    # use the right indices for the Null
+    diffMat<- dta_stim[,4:16]-dta_Null[dta_stim$DonorId,4:16]
+    medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+    id <- medianVal > log(1.3)
+    protList <- colnames(dta_stim[4:16][,id])
+
+    curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+    curr_dta[,1:3] <- dta_stim[,1:3]
+    n <- length(protList)+3
+    curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+    curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+    dta_stimul <- curr_dta
+    
+dta_stimul <- merge.data.frame(dta_stimul, df_counts, by.x = "DonorId", by.y = "SUBJID")    
+    
+DF <- DF[match(ind_CD3_CD28, DF$DonorId),]
+DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+
+    
+proba <- list()
+res <- list()
+res.lmg <- list()
+res.sum_sq <- list()
+sum_sq <- list()
+
+for (i in protList){
+  
+  #i="Cxcl5"
+  
+  DF2 <- na.omit(DF[,c(i,'DonorId', 'AGE', 'SEX', 'SMOKING','BMI', 'CMV', 'EMRA_HLADRpos_in_CD8bpos', 'rs352045', 'rs1801274')])
+  
+  
+  
+  DF2[,"Age"] <- DF2[,"AGE"]
+  DF2[,"Sex"] <- as.factor(DF2[,"SEX"])
+  DF2[,"Smoking"] <- as.factor(DF2[,"SMOKING"])
+  DF2[,"CMV"] <- as.factor(DF2[,"CMV"])
+  DF2[,"Cellular"] <- DF2[,"EMRA_HLADRpos_in_CD8bpos"]
+  DF2[,"cispQTL"] <- as.factor(DF2[,"rs352045"])
+  #DF2[,"cispQTL_2"] <- as.factor(DF2[,"rs143060887"])
+  #DF2[,"cispQTL_3"] <- as.factor(DF2[,"rs62449491"])
+  #DF2[,"cispQTL_4"] <- as.factor(DF2[,"rs1518110"])
+  DF2[,"transpQTL"] <- as.factor(DF2[,'rs1801274'])
+  #DF2[,"mepQTL"] <- DF2[,'cg03239976']
+  
+  
+
+  # adjust for each stim
+  res[[i]] <- car::Anova(lm(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular + cispQTL + transpQTL ,  #Anova Table (Type II tests)
+                            data = DF2))
+  
+  res.lmg[[i]] <- calc.relimp(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular + cispQTL + transpQTL ,
+                              DF2, type="lmg")
+  
+  # store proba
+  proba[[i]] <- res[[i]][1:(nrow(res[[i]])-1),'Pr(>F)']
+  
+  # store sum_sq
+  sum_sq[[i]] <- as.list(res.lmg[[i]]$lmg)
+  
+  res.sum_sq[[i]] <- unlist(sum_sq[[i]])
+
+  
+}
+
+proba_mat_stimul <- as.data.frame(proba)  
+
+# to adjust for each graph 
+row.names(proba_mat_stimul) <- c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular","cispQTL", "transpQTL")
+
+# qvalues computation and filtering
+proba_mat_stimul_qvalues <- qvalue(proba_mat_stimul, pi0 = 1)$qvalue
+proba_mat_stimul_qvalues_select <- apply(proba_mat_stimul_qvalues,1, function (x) (x< 0.05))
+#proba_mat_stimul_qvalues_select <- proba_mat_stimul_qvalues_select[,colSums(proba_mat_stimul_qvalues_select) >= 1]
+#colM <- colnames(matDATAselect)
+melted_proba_mat_stimul_select <- melt(t(proba_mat_stimul_qvalues_select))
+melted_proba_mat_stimul_select <- data.frame(rep(stimul, nrow(melted_proba_mat_stimul_select)), melted_proba_mat_stimul_select)
+colnames(melted_proba_mat_stimul_select)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_select_ini <- melted_proba_mat_stimul_select  # initier avec LPS
+colnames(melted_proba_mat_select_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_select_ini <- rbind(melted_proba_mat_select_ini, melted_proba_mat_stimul_select)
+
+melted_proba_stimul <- melt(as.matrix(proba_mat_stimul_qvalues))
+melted_proba_mat_stimul <- data.frame(rep(stimul, nrow(melted_proba_stimul)), melted_proba_stimul)
+colnames(melted_proba_mat_stimul)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_ini <- melted_proba_mat_stimul  # initier avec LPS
+colnames(melted_proba_mat_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_ini <- rbind(melted_proba_mat_ini, melted_proba_mat_stimul)
+
+sumsq_mat_stimul <- as.data.frame(res.sum_sq) 
+
+# to adjust to each graph 
+sumsq_mat_stimul <-sumsq_mat_stimul[c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "cispQTL", "transpQTL"),]
+
+melted_sumsq_stimul <- melt(as.matrix(sumsq_mat_stimul))
+melted_sumsq_mat_stimul <- data.frame(rep(stimul, nrow(melted_sumsq_stimul)), melted_sumsq_stimul)
+colnames(melted_sumsq_mat_stimul)<- c("stim", "Var1", "Var2", "sumsq")
+melted_sumsq_mat_ini <- melted_sumsq_mat_stimul # initier avec LPS
+colnames(melted_sumsq_mat_ini) <- c("stim", "Var1", "Var2", "sumsq")
+#melted_sumsq_mat_ini <- rbind(melted_sumsq_mat_ini, melted_sumsq_mat_stimul)
+
+AGE= "#2297E6" #bleu fonce
+SEX= "#61D04F" # vert 
+SMOKING= "black"# noir
+CMV= "#CD0BBC" #rose
+BMI = "#28E2E5" #bleuclair
+Cellular="#F5C710" #jaune
+cispQTL= "#DF536B"
+transpQTL="grey62" #gris
+meQTL='white' #blanc
+
+# signif values
+sel <- melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),] 
+l <-as.character(unique(sel$Var2[order(as.character(sel$Var2))]))
+
+p_sumsq_signif <- ggplot(sel)  +
+  aes(x =  factor(sel$Var2, levels= l), y = sumsq, fill = Var1) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_x_discrete("")+
+  scale_y_continuous(labels = percent, name = "")+
+  scale_fill_manual(values = c("#2297E6" ,"#61D04F", "black",  "#28E2E5" , "#CD0BBC","#F5C710", "#DF536B","grey62" ))+
+  coord_flip()+
+  theme_classic()+
+  facet_wrap(~stim, nrow=3, ncol=3, scale="free") + 
+  theme(legend.position = "bottom", axis.text.x = element_text(size = 10), axis.text.y = element_text(size = 10))+
+  labs(fill = "Factors")
+#ggtitle(paste(stimul,", Variance explained", sep="")) 
+ggsave(plot=p_sumsq_signif, filename = paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(), '.pdf'), height= 4.2, width=3.5)
+p_sumsq_signif
+
+write.table(as.data.frame(melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),]),paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(),'_values.txt'), quote=F, row.names = F, sep="\t")
+
+melted_sumsq_mat_signif <- rbind(melted_sumsq_mat_signif, melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),])
+
+
+```
+
+# PolyIC
+```{r, results="hide"} 
+
+stimul='PolyIC'
+print(paste0('stimul=',stimul))
+diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+
+#to work on expressed prot only
+dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+
+medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+id <- medianVal > log(1.3)
+protList <- colnames(dta_stim[4:16][,id])  
+
+curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+curr_dta[,1:3] <- dta_stim[,1:3]
+n <- length(protList)+3
+curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+dta_stimul <- curr_dta
+dta_stimul <- merge.data.frame(dta_stimul, df_counts, by.x = "DonorId", by.y = "SUBJID")
+
+DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+
+
+proba <- list()
+res <- list()
+res.lmg <- list()
+res.sum_sq <- list()
+sum_sq <- list()
+
+for (i in protList){
+  
+  #i="Cxcl5"
+  
+  DF2 <- na.omit(DF[,c(i,'DonorId', 'AGE', 'SEX', 'SMOKING','BMI', 'CMV', 'cDC3', 'rs352045', 'rs3775291', 'rs10822168', 'cg20524905' )])
+  
+    DF2[,"Age"] <- DF2[,"AGE"]
+  DF2[,"Sex"] <- as.factor(DF2[,"SEX"])
+  DF2[,"Smoking"] <- as.factor(DF2[,"SMOKING"])
+  DF2[,"CMV"] <- as.factor(DF2[,"CMV"])
+  DF2[,"Cellular"] <- DF2[,"cDC3"]
+  DF2[,"cispQTL"] <- as.factor(DF2[,"rs352045"])
+  #DF2[,"cispQTL_2"] <- as.factor(DF2[,"rs143060887"])
+  #DF2[,"cispQTL_3"] <- as.factor(DF2[,"rs62449491"])
+  #DF2[,"cispQTL_4"] <- as.factor(DF2[,"rs1518110"])
+  DF2[,"transpQTL_1"] <- as.factor(DF2[,'rs3775291'])
+  DF2[,"transpQTL_2"] <- as.factor(DF2[,'rs10822168'])
+  #DF2[,"transpQTL_3"] <- as.factor(DF2[,'rs10013453'])
+  DF2[,"mepQTL"] <- DF2[,'cg20524905']
+  
+  
+  
+  # adjust for each stim
+  res[[i]] <- car::Anova(lm(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular +  cispQTL +transpQTL_1 + transpQTL_2 + mepQTL,  #Anova Table (Type II tests)
+                            data = DF2))
+  
+  res.lmg[[i]] <- calc.relimp(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular + cispQTL +transpQTL_1 + transpQTL_2 + mepQTL,
+                              DF2, type="lmg")
+  
+  # store proba
+  proba[[i]] <- res[[i]][1:(nrow(res[[i]])-1),'Pr(>F)']
+  
+  # store sum_sq
+  sum_sq[[i]] <- as.list(res.lmg[[i]]$lmg)
+  
+  res.sum_sq[[i]] <- unlist(sum_sq[[i]])
+  
+  
+}
+
+proba_mat_stimul <- as.data.frame(proba)  
+
+# to adjust for each graph 
+row.names(proba_mat_stimul) <- c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "cispQTL","transpQTL_1", "transpQTL_2", "mepQTL")
+
+# qvalues computation and filtering
+proba_mat_stimul_qvalues <- qvalue(proba_mat_stimul, pi0 = 1)$qvalue
+proba_mat_stimul_qvalues_select <- apply(proba_mat_stimul_qvalues,1, function (x) (x< 0.05))
+#proba_mat_stimul_qvalues_select <- proba_mat_stimul_qvalues_select[,colSums(proba_mat_stimul_qvalues_select) >= 1]
+#colM <- colnames(matDATAselect)
+melted_proba_mat_stimul_select <- melt(t(proba_mat_stimul_qvalues_select))
+melted_proba_mat_stimul_select <- data.frame(rep(stimul, nrow(melted_proba_mat_stimul_select)), melted_proba_mat_stimul_select)
+colnames(melted_proba_mat_stimul_select)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_select_ini <- melted_proba_mat_stimul_select  # initier avec LPS
+colnames(melted_proba_mat_select_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_select_ini <- rbind(melted_proba_mat_select_ini, melted_proba_mat_stimul_select)
+
+melted_proba_stimul <- melt(as.matrix(proba_mat_stimul_qvalues))
+melted_proba_mat_stimul <- data.frame(rep(stimul, nrow(melted_proba_stimul)), melted_proba_stimul)
+colnames(melted_proba_mat_stimul)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_ini <- melted_proba_mat_stimul  # initier avec LPS
+colnames(melted_proba_mat_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_ini <- rbind(melted_proba_mat_ini, melted_proba_mat_stimul)
+sumsq_mat_stimul <- as.data.frame(res.sum_sq) 
+
+# to adjust to each graph 
+sumsq_mat_stimul <-sumsq_mat_stimul[c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular",  "cispQTL" ,"transpQTL_1" , "transpQTL_2" , "mepQTL"),]
+
+melted_sumsq_stimul <- melt(as.matrix(sumsq_mat_stimul))
+melted_sumsq_mat_stimul <- data.frame(rep(stimul, nrow(melted_sumsq_stimul)), melted_sumsq_stimul)
+colnames(melted_sumsq_mat_stimul)<- c("stim", "Var1", "Var2", "sumsq")
+melted_sumsq_mat_ini <- melted_sumsq_mat_stimul # initier avec LPS
+colnames(melted_sumsq_mat_ini) <- c("stim", "Var1", "Var2", "sumsq")
+#melted_sumsq_mat_ini <- rbind(melted_sumsq_mat_ini, melted_sumsq_mat_stimul)
+
+
+AGE= "#2297E6" #bleu fonce
+SEX= "#61D04F" # vert 
+SMOKING= "black"# noir
+CMV= "#CD0BBC" #rose
+BMI = "#28E2E5" #bleuclair
+Cellular="#F5C710" #jaune
+cispQTL= "#DF536B"
+transpQTL="grey62" #gris
+meQTL='white' #blanc
+
+# signif values
+sel <- melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),] 
+l <-as.character(unique(sel$Var2[order(as.character(sel$Var2))]))
+
+p_sumsq_signif <- ggplot(sel)  +
+  aes(x =  factor(sel$Var2, levels= l), y = sumsq, fill = Var1) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_x_discrete("")+
+  scale_y_continuous(labels = percent, name = "")+
+  #scale_fill_manual(values = c("blue", "pink", "orange", "purple", "light blue", "pink","red" ))+
+  scale_fill_manual(values = c("#2297E6" ,"#61D04F", "black",  "#28E2E5" , "#F5C710",  "#DF536B", "grey62",  "grey62"))+
+  #scale_fill_viridis_d() +
+  coord_flip()+
+  theme_classic()+
+  facet_wrap(~stim, nrow=3, ncol=3, scale="free") + 
+  theme(legend.position = "bottom", axis.text.x = element_text(size = 10), axis.text.y = element_text(size = 10))+
+  labs(fill = "Factors")
+#ggtitle(paste(stimul,", Variance explained", sep="")) 
+ggsave(plot=p_sumsq_signif, filename = paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(), '.pdf'), height= 4.2, width=3.5)
+p_sumsq_signif
+
+write.table(as.data.frame(melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),]),paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(),'_values.txt'), quote=F, row.names = F, sep="\t")
+
+melted_sumsq_mat_signif <- rbind(melted_sumsq_mat_signif, melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),])
+
+
+```
+
+# C. albicans
+```{r, results="hide"} 
+
+stimul='C.albicans'
+print(paste0('stimul=',stimul))
+diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+
+#to work on expressed prot only
+dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+
+medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+id <- medianVal > log(1.3)
+
+protList <- colnames(dta_stim[4:16][,id])  
+
+curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+curr_dta[,1:3] <- dta_stim[,1:3]
+n <- length(protList)+3
+curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+dta_stimul <- curr_dta
+dta_stimul <- merge.data.frame(dta_stimul, df_counts, by.x = "DonorId", by.y = "SUBJID")
+
+DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+
+
+proba <- list()
+res <- list()
+res.lmg <- list()
+res.sum_sq <- list()
+sum_sq <- list()
+
+for (i in protList){
+  
+  #i="Cxcl5"
+  
+  DF2 <- na.omit(DF[,c(i,'DonorId', 'AGE', 'SEX', 'SMOKING','BMI', 'CMV', 'mono', 'rs10779330', 'rs11117956', 'cg25065535', 'cg17850932' )])
+  
+  DF2[,"Age"] <- DF2[,"AGE"]
+  DF2[,"Sex"] <- as.factor(DF2[,"SEX"])
+  DF2[,"Smoking"] <- as.factor(DF2[,"SMOKING"])
+  DF2[,"CMV"] <- as.factor(DF2[,"CMV"])
+  DF2[,"Cellular"] <- DF2[,"mono"]
+  #DF2[,"cispQTL"] <- as.factor(DF2[,"rs352045"])
+  #DF2[,"cispQTL_2"] <- as.factor(DF2[,"rs143060887"])
+  #DF2[,"cispQTL_3"] <- as.factor(DF2[,"rs62449491"])
+  #DF2[,"cispQTL_4"] <- as.factor(DF2[,"rs1518110"])
+  DF2[,"transpQTL_1"] <- as.factor(DF2[,'rs10779330'])
+  DF2[,"transpQTL_2"] <- as.factor(DF2[,'rs11117956'])
+  #DF2[,"transpQTL_3"] <- as.factor(DF2[,'rs10013453'])
+  DF2[,"mepQTL_1"] <- DF2[,'cg25065535']
+  DF2[,"mepQTL_2"] <- DF2[,'cg17850932']
+  
+  
+  # adjust for each stim
+  res[[i]] <- car::Anova(lm(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular +  transpQTL_1 + transpQTL_2 + mepQTL_1 + mepQTL_2,  #Anova Table (Type II tests)
+                            data = DF2))
+  
+  res.lmg[[i]] <- calc.relimp(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular + transpQTL_1 + transpQTL_2 + mepQTL_1 + mepQTL_2,
+                              DF2, type="lmg")
+  
+  # store proba
+  proba[[i]] <- res[[i]][1:(nrow(res[[i]])-1),'Pr(>F)']
+  
+  # store sum_sq
+  sum_sq[[i]] <- as.list(res.lmg[[i]]$lmg)
+  
+  res.sum_sq[[i]] <- unlist(sum_sq[[i]])
+  
+}
+
+proba_mat_stimul <- as.data.frame(proba)  
+
+# to adjust for each graph 
+row.names(proba_mat_stimul) <- c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "transpQTL_1", "transpQTL_2", "mepQTL_1", "mepQTL_2")
+
+# qvalues computation and filtering
+proba_mat_stimul_qvalues <- qvalue(proba_mat_stimul, pi0 = 1)$qvalue
+proba_mat_stimul_qvalues_select <- apply(proba_mat_stimul_qvalues,1, function (x) (x< 0.05))
+#proba_mat_stimul_qvalues_select <- proba_mat_stimul_qvalues_select[,colSums(proba_mat_stimul_qvalues_select) >= 1]
+#colM <- colnames(matDATAselect)
+melted_proba_mat_stimul_select <- melt(t(proba_mat_stimul_qvalues_select))
+melted_proba_mat_stimul_select <- data.frame(rep(stimul, nrow(melted_proba_mat_stimul_select)), melted_proba_mat_stimul_select)
+colnames(melted_proba_mat_stimul_select)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_select_ini <- melted_proba_mat_stimul_select  # initier avec LPS
+colnames(melted_proba_mat_select_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_select_ini <- rbind(melted_proba_mat_select_ini, melted_proba_mat_stimul_select)
+
+melted_proba_stimul <- melt(as.matrix(proba_mat_stimul_qvalues))
+melted_proba_mat_stimul <- data.frame(rep(stimul, nrow(melted_proba_stimul)), melted_proba_stimul)
+colnames(melted_proba_mat_stimul)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_ini <- melted_proba_mat_stimul  # initier avec LPS
+colnames(melted_proba_mat_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_ini <- rbind(melted_proba_mat_ini, melted_proba_mat_stimul)
+
+sumsq_mat_stimul <- as.data.frame(res.sum_sq) 
+
+# to adjust to each graph 
+sumsq_mat_stimul <-sumsq_mat_stimul[c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "transpQTL_1" , "transpQTL_2" , "mepQTL_1", "mepQTL_2"),]
+
+melted_sumsq_stimul <- melt(as.matrix(sumsq_mat_stimul))
+melted_sumsq_mat_stimul <- data.frame(rep(stimul, nrow(melted_sumsq_stimul)), melted_sumsq_stimul)
+colnames(melted_sumsq_mat_stimul)<- c("stim", "Var1", "Var2", "sumsq")
+melted_sumsq_mat_ini <- melted_sumsq_mat_stimul # initier avec LPS
+colnames(melted_sumsq_mat_ini) <- c("stim", "Var1", "Var2", "sumsq")
+#melted_sumsq_mat_ini <- rbind(melted_sumsq_mat_ini, melted_sumsq_mat_stimul)
+
+AGE= "#2297E6" #bleu fonce
+SEX= "#61D04F" # vert 
+SMOKING= "black"# noir
+CMV= "#CD0BBC" #rose
+BMI = "#28E2E5" #bleuclair
+Cellular="#F5C710" #jaune
+cispQTL= "#DF536B"
+transpQTL="grey62" #gris
+meQTL='light grey' #blanc
+
+# signif values
+sel <- melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),] 
+l <-as.character(unique(sel$Var2[order(as.character(sel$Var2))]))
+
+p_sumsq_signif <- ggplot(sel)  +
+  aes(x =  factor(sel$Var2, levels= l), y = sumsq, fill = Var1) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_x_discrete("")+
+  scale_y_continuous(labels = percent, name = "")+
+  #scale_fill_manual(values = c("blue", "pink", "orange", "purple", "light blue", "pink","red" ))+
+  scale_fill_manual(values = c("#2297E6" ,"#61D04F", "black",  "#28E2E5" , "#F5C710", "grey62", 'light grey', 'light grey'))+
+  #scale_fill_viridis_d() +
+  coord_flip()+
+  theme_classic()+
+  facet_wrap(~stim, nrow=3, ncol=3, scale="free") + 
+  theme(legend.position = "bottom", axis.text.x = element_text(size = 10), axis.text.y = element_text(size = 10))+
+  labs(fill = "Factors")
+#ggtitle(paste(stimul,", Variance explained", sep="")) 
+ggsave(plot=p_sumsq_signif, filename = paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(), '.pdf'), height= 4.2, width=3.5)
+p_sumsq_signif
+
+write.table(as.data.frame(melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),]),paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(),'_values.txt'), quote=F, row.names = F, sep="\t")
+
+melted_sumsq_mat_signif <- rbind(melted_sumsq_mat_signif, melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),])
+
+```
+
+# Influenza
+```{r, results="hide"} 
+
+stimul='Influenza'
+print(paste0('stimul=',stimul))
+diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+
+#to work on expressed prot only
+dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+
+medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+id <- medianVal > log(1.3)
+
+protList <- colnames(dta_stim[4:16][,id])  
+
+curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+curr_dta[,1:3] <- dta_stim[,1:3]
+n <- length(protList)+3
+curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+dta_stimul <- curr_dta
+dta_stimul <- merge.data.frame(dta_stimul, df_counts, by.x = "DonorId", by.y = "SUBJID")
+
+DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+
+
+proba <- list()
+res <- list()
+res.lmg <- list()
+res.sum_sq <- list()
+sum_sq <- list()
+
+
+for (i in protList){
+  
+  #i="Cxcl5"
+  
+  DF2 <- na.omit(DF[,c(i,'DonorId', 'AGE', 'SEX', 'SMOKING','BMI', 'CMV', 'CD3pos', 'rs352045', 'rs35345753', 'cg16468729' )])
+  
+
+  DF2[,"Age"] <- DF2[,"AGE"]
+  DF2[,"Sex"] <- as.factor(DF2[,"SEX"])
+  DF2[,"Smoking"] <- as.factor(DF2[,"SMOKING"])
+  DF2[,"CMV"] <- as.factor(DF2[,"CMV"])
+  DF2[,"Cellular"] <- DF2[,"CD3pos"]
+  DF2[,"cispQTL_1"] <- as.factor(DF2[,"rs352045"])
+  DF2[,"cispQTL_2"] <- as.factor(DF2[,"rs35345753"])
+  #DF2[,"cispQTL_3"] <- as.factor(DF2[,"rs62449491"])
+  #DF2[,"cispQTL_4"] <- as.factor(DF2[,"rs1518110"])
+  #DF2[,"transpQTL_1"] <- as.factor(DF2[,'rs10779330'])
+  #DF2[,"transpQTL_2"] <- as.factor(DF2[,'rs11117956'])
+  #DF2[,"transpQTL_3"] <- as.factor(DF2[,'rs10013453'])
+  DF2[,"mepQTL"] <- DF2[,'cg16468729']
+  
+  
+  # adjust for each stim
+  res[[i]] <- car::Anova(lm(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular +  cispQTL_1 + cispQTL_2 + mepQTL,  #Anova Table (Type II tests)
+                            data = DF2))
+  
+  res.lmg[[i]] <- calc.relimp(DF2[,i] ~ Age + Sex + Smoking + BMI + CMV + Cellular + cispQTL_1 + cispQTL_2 + mepQTL,
+                              DF2, type="lmg")
+  
+  # store proba
+  proba[[i]] <- res[[i]][1:(nrow(res[[i]])-1),'Pr(>F)']
+  
+  # store sum_sq
+  sum_sq[[i]] <- as.list(res.lmg[[i]]$lmg)
+  
+  res.sum_sq[[i]] <- unlist(sum_sq[[i]])
+  
+}
+
+proba_mat_stimul <- as.data.frame(proba)  
+
+# to adjust for each graph 
+row.names(proba_mat_stimul) <- c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "cispQTL_1", "cispQTL_2", "mepQTL")
+
+#qvalues computation and filtering
+proba_mat_stimul_qvalues <- qvalue(proba_mat_stimul, pi0 = 1)$qvalue
+proba_mat_stimul_qvalues_select <- apply(proba_mat_stimul_qvalues,1, function (x) (x< 0.05))
+#proba_mat_stimul_qvalues_select <- proba_mat_stimul_qvalues_select[,colSums(proba_mat_stimul_qvalues_select) >= 1]
+#colM <- colnames(matDATAselect)
+melted_proba_mat_stimul_select <- melt(t(proba_mat_stimul_qvalues_select))
+melted_proba_mat_stimul_select <- data.frame(rep(stimul, nrow(melted_proba_mat_stimul_select)), melted_proba_mat_stimul_select)
+colnames(melted_proba_mat_stimul_select)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_select_ini <- melted_proba_mat_stimul_select  # initier avec LPS
+colnames(melted_proba_mat_select_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_select_ini <- rbind(melted_proba_mat_select_ini, melted_proba_mat_stimul_select)
+
+melted_proba_stimul <- melt(as.matrix(proba_mat_stimul_qvalues))
+melted_proba_mat_stimul <- data.frame(rep(stimul, nrow(melted_proba_stimul)), melted_proba_stimul)
+colnames(melted_proba_mat_stimul)<- c("stim", "Var1", "Var2", "proba")
+melted_proba_mat_ini <- melted_proba_mat_stimul  # initier avec LPS
+colnames(melted_proba_mat_ini) <- c("stim", "Var1", "Var2", "proba")
+#melted_proba_mat_ini <- rbind(melted_proba_mat_ini, melted_proba_mat_stimul)
+
+sumsq_mat_stimul <- as.data.frame(res.sum_sq) 
+
+# to adjust to each graph 
+sumsq_mat_stimul <-sumsq_mat_stimul[c("Age", "Sex", "Smoking", "BMI", "CMV", "Cellular", "cispQTL_1" , "cispQTL_2" , "mepQTL"),]
+
+melted_sumsq_stimul <- melt(as.matrix(sumsq_mat_stimul))
+melted_sumsq_mat_stimul <- data.frame(rep(stimul, nrow(melted_sumsq_stimul)), melted_sumsq_stimul)
+colnames(melted_sumsq_mat_stimul)<- c("stim", "Var1", "Var2", "sumsq")
+melted_sumsq_mat_ini <- melted_sumsq_mat_stimul # initier avec LPS
+colnames(melted_sumsq_mat_ini) <- c("stim", "Var1", "Var2", "sumsq")
+#melted_sumsq_mat_ini <- rbind(melted_sumsq_mat_ini, melted_sumsq_mat_stimul)
+
+
+AGE= "#2297E6" #bleu fonce
+SEX= "#61D04F" # vert 
+SMOKING= "black"# black
+CMV= "#CD0BBC" #rose
+BMI = "#28E2E5" #bleuclair
+Cellular="#F5C710" #jaune
+cispQTL= "#DF536B"
+transpQTL="grey62" #gris
+meQTL='light grey' #blanc
+
+# signif values
+sel <- melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),] 
+l <-as.character(unique(sel$Var2[order(as.character(sel$Var2))]))
+
+p_sumsq_signif <- ggplot(sel)  +
+  aes(x =  factor(sel$Var2, levels= l), y = sumsq, fill = Var1) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_x_discrete("")+
+  scale_y_continuous(labels = percent, name = "")+
+  #scale_fill_manual(values = c("blue", "pink", "orange", "purple", "light blue", "pink","red" ))+
+  scale_fill_manual(values = c("#2297E6"  ,"#61D04F", "#28E2E5",  "#F5C710" ,  "#DF536B",  "#DF536B"))+
+  #scale_fill_viridis_d() +
+  coord_flip()+
+  theme_classic()+
+  facet_wrap(~stim, nrow=3, ncol=3, scale="free") + 
+  theme(legend.position = "bottom", axis.text.x = element_text(size = 10), axis.text.y = element_text(size = 10))+
+  labs(fill = "Factors")
+#ggtitle(paste(stimul,", Variance explained", sep="")) 
+ggsave(plot=p_sumsq_signif, filename = paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(), '.pdf'), height= 4.2, width=3.5)
+p_sumsq_signif
+
+write.table(as.data.frame(melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),]),paste0(pathRes,'/sumsq_signifQval0.05_', stimul, '_', Sys.Date(),'_values.txt'), quote=F, row.names = F, sep="\t")
+
+melted_sumsq_mat_signif <- rbind(melted_sumsq_mat_signif, melted_sumsq_mat_ini[which(melted_proba_mat_select_ini$proba=="TRUE"),])
+
+
+write.table(as.data.frame(melted_sumsq_mat_signif),paste0(pathRes,'/VarianceExplainedCompiledValues_', Sys.Date(),'_values.txt'), quote=F, row.names = F, sep="\t")
+
+```
