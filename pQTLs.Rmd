@@ -1,0 +1,877 @@
+---
+title: "Milieu Intérieur Project Cytokine data analysis"
+date: "2023-06-10"
+authors: "Anthony Bertrand and Violaine Saint-André"
+
+## License
+#  Milieu Intérieur Project Cytokine data analysis
+#     Copyright (C) 2023  Violaine Saint-André
+#     contact: violaine.saint-andre@pasteur.fr
+# 
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+##
+---
+
+# Loading Packages and setting the markdown
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(knitr)
+```
+
+```{r setup, echo=FALSE}
+# Change Path to your working directory
+knitr::opts_knit$set(root.dir = 'WorkingDir') # Change that to the corresponding directory
+# No warnings or supplementary message in the html 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+# Setting the list of SNPs of interest
+
+```{r}
+cisQTL.SNPS <- c("rs352045", "rs62449491", "rs1518110", "rs143060887")
+
+transQTL.SNPS <- c("rs10013453", "rs10822168", "rs10779330", "rs72636686", "rs1801274", "rs377529", 
+                   "rs3764613", "rs10863358", "rs3775291", "rs11117956")
+```
+
+# eQTLs - www.eqtlgen.org
+
+The first results were obtained through the data base available on the following websites:
+> * https://www.eqtlgen.org/cis-eqtls.html
+> * https://www.eqtlgen.org/trans-eqtls.html
+
+These data bases enable one to search for associations between SNPs and the cytokines of interest. Informations about both cis- and trans-eQTLs can be found through this database.
+For each of the SNPs of interest (and for both cis and trans eQTLs) `csv` files with information on the corresponding SNPs.
+
+```{r}
+df.cis <- data.frame() # create an empty data frame 
+
+for (snp in cisQTL.SNPS){
+  
+  res <- read.csv(paste0("./data/eQTLGen_cis_", snp, ".csv")) # load the information about the SNP of interest.
+  
+  res <- res %>% filter(ID == snp) # select rows about the SNP of interest
+  
+  df.cis <- rbind(df.cis, res) # add the information at the end of the dataframe
+  
+}
+
+kable(df.cis, caption = "Listed SNPs") # display the table in the markdown
+
+write.table(df.cis, "./results/eqtlgen-cis.csv", sep = ",", row.names = F, col.names = T)
+```
+## trans eQTLs
+
+```{r}
+df.trans <- data.frame()
+
+for (snp in transQTL.SNPS){
+  
+  res <- read.csv(paste0("./data/eQTLGen_trans_", snp, ".csv"))
+  res <- res %>% filter(ID == snp)
+  df.trans <- rbind(df.trans, res)
+  
+}
+
+kable(df.trans, caption = "Listed SNPs")
+```
+Apparently, no significant associations were observed with gene expression for trans eQTLs in the data base.
+
+# cis-eQTLs from GTEx data
+
+https://www.nature.com/articles/nature24277 
+In this study, in the supplementary data, there is an excel files with a sheet containing information on some cis-eQTL. 
+https://static-content.springer.com/esm/art%3A10.1038%2Fnature24277/MediaObjects/41586_2017_BFnature24277_MOESM4_ESM.xlsx
+
+```{r}
+library(readxl)
+
+cis.eQTL.GTEx <- read_excel("./data/41586_2017_BFnature24277_MOESM4_ESM.xlsx", sheet = "cis-eQTL") %>% # Read the excel file at the cis-eQTL sheet
+                  filter(snp %in% cisQTL.SNPS) # Select rows that contains SNPs of interest.
+
+# Display results
+if (nrow(cis.eQTL.GTEx) == 0){ 
+  print("Corresponding SNPs not found in this table")
+}else{
+  kable(cis.eQTL.GTEx)
+}
+```
+
+# SomaLogic plasma protein GWAS summary statistics
+
+Resources
+* https://www.ensembl.org/index.html
+* https://www.gtexportal.org/home/datasets
+* https://www.gtexportal.org/home/snp/rs3775291 : Useful SNP browser with complete information on SNP chromosome, position
+* http://www.phpc.cam.ac.uk/ceu/proteins/ : Data for SNPs for a set of plasma protein. In these data, one can find SNPs for the following proteins (CXCL5, IFNG, IL1B, IL2, IL6, IL10, IL12A). Actually, this data is organised in folders containing the name of the corresponding proteins. For each of these proteins, there are 22 files for each somatic chromosome with the data for the SNPs corresponding to the chromosome. From these files, one can access to the Effect Size and the $\log_{10}(p)$ for the association between the protein and the SNPs. Note that these files refer to the SNP with the chromosome, the position in the chromosome and the alleles but not the rsID. 
+
+```{r}
+lequal <- function(a, b){# Function to compare 2 lists
+  bool <- T
+  if (length(a) != length(b)){
+    bool <- F
+  }
+  else{
+    for (i in length(a)){
+      bool <- bool && (a[i] == b[i])
+    }
+  }
+  return(bool)
+}
+
+# Function that detects in characters if it starts with "Pairwise r2"
+starts.with.r2 <- function(x){
+  str_detect(x, "^Pairwise r2")
+}
+# Function that detects in characters if it starts with "Pairwise D"
+starts.with.D <- function(x){
+  str_detect(x, "^Pairwise D")
+}
+
+replace.LD.data <- function(x){ # Replace the "-" by 0 in the LD matrix
+  if (str_detect(x, "-")){
+    x <- as.character(0)
+  }else if (str_detect(x, "^rs")){ # Replace the "rs" by 1 in the LD matrix
+    x <- as.character(1)
+  }
+}
+
+ensemble.LD.datatransformation <- function(path){ # Function that transforms the data from the LD file of ensemble to a proper matrix
+  
+  df <- read_excel(path, col_names = F) # Read the ensembl LD data
+  colnames(df)[1] <- "LD.metric" # Renaming the first column to make the manip easier
+  
+  # get the index of the rows that starts with Pairwise r2 or D'
+  ind <- which(starts.with.r2(df$LD.metric)) 
+  ind2 <- which(starts.with.D(df$LD.metric))
+  
+  # Define lim to select the data between ind and lim
+  if (ind > ind2){ # if ind > ind2, then the line with Pairwise r2 is after the one with D' so the limit is the end of the file
+    lim <- nrow(df)
+  }
+  else{ # otherwise the lim is the row before the start of Pariwise D' data.
+    lim <- ind2 - 1
+  }
+  
+  df <- df[ind:lim, ] %>% filter(!is.na(LD.metric)) %>% filter(!is.na(`...2`)) # Deleting the NAs rows
+  colnames(df) <- df[1,] # Setting the SNPs rs IDs as colnames
+  df <- df[2:nrow(df), ] # Selecting the columns that contains the R2 data 
+  # df.cop <- df
+  
+  for (i in 1:nrow(df)){ # Go through each lines and cols of the LD matrix
+    for (j in 3:ncol(df)){
+      if (is.na(df[i, j])){ # if the element is NA then we're in the upper part of the matrix and we fill it symetrically
+        if (str_detect(df[j - 2, i + 2], "-")){ # The idea is to replace - by 0, rsID by 1 
+          df[i, j] <- as.character(0)
+        }
+        else if (str_detect(df[j - 2, i + 2], "^rs")){
+          df[i,j] <- as.character(1)
+        }
+        else if (str_detect(df[j - 2, i + 2], "^\\*rs")){ # if it starts by *rs, then it's the SNP of interest, give the value -1 so we don't collect this data after
+          df[i,j] <- as.character(-1)
+        }
+        else{
+          df[i,j] <- df[j - 2, i + 2]
+        }
+      }
+      else if (str_detect(df[i, j], "-")){ 
+        df[i, j] <- as.character(0)
+      }
+      else if (str_detect(df[i, j], "^rs")){
+        df[i, j] <- as.character(1)
+      }
+      else if (str_detect(df[j - 2, i + 2], "^\\*rs")){
+          df[i,j] <- as.character(-1) 
+      }
+    }
+  }
+  
+  df <- df %>% mutate_at(3:ncol(df), as.numeric) # Make it numeric
+  
+  return (df)
+}
+```
+
+The main difficulty here is that we cannot match the SNPs of interest in the files because the files do not contain rsIDs but only chromosome, position and alleles.
+We can easily browse some SNPs on the following website https://www.gtexportal.org/home/snp/rs and extract a table with the rsID, the chromosome, the position and the alleles to match the data. Another solution is to use a `mysql` command with the list of the SNPs of interests.
+
+# pQTL study SomaLogic all SNPs of the table
+
+Extraction of information related to the SNPs of interest based on the hg19 version of the human genome. We chose this version because it's the one used in the SomaLogic database. 
+
+```{bash}
+mysql --user=genome --host=genome-mysql.soe.ucsc.edu -A -P 3306 -D hg19 -e 'select chrom,chromStart,chromEnd,name,alleles,alleleFreqs from snp150 where name in ("rs352045", "rs10004195", "rs10013453", "rs10034903", "rs10779330", "rs10822168", "rs10863358", "rs11117956", "rs11936050", "rs143060887", "rs1518110", "rs1801274", "rs2393969", "rs2564594", "rs35345753", "rs3764613", "rs3775291", "rs4833095", "rs5743614", "rs62449491", "rs6815814", "rs72636686");' | sed "s/'/\'/;s/\t/\",\"/g;s/^/\"/;s/$/\"/;s/\n//g" > ./results/out_allSNPsTable_hg19.csv
+```
+
+Loading the data with the info about the associations found in the paper, the data of the information of the related genes and merging them.
+```{r}
+pqtlasso <- read.csv("./data/SmokingAssociationspQTL.tsv", 
+                     sep = ",", 
+                     header = T) %>% select(!adjpval) %>% distinct()
+
+snp.table.complete <- read.csv("./results/out_allSNPsTable_hg19.csv") %>% 
+                          mutate(alleles = gsub(",$", "", alleles)) %>% 
+                          separate(alleles, c("allele1", "allele2"), sep = ",") 
+
+table.pqtl <- merge(pqtlasso, snp.table.complete, by.x = "rsID", by.y = "name")
+```
+
+Now we browse the database to see if these associations were already found in this db. 
+
+```{r}
+pqtlasso.res <- pqtlasso
+# Creating a list of the proteins of interest present in both data sets (what we have + SOMAer)
+targets.prots.tot <- intersect(c("CXCL5", "IFNG", "IL1B", "IL2", "IL6", "IL10", "IL12A"), 
+                           unique(table.pqtl$Cytokine)
+                           )
+
+targets.prots <- targets.prots.tot
+
+# Reducing the table to only the SNPs and the prot for which we have data
+table.pqtl <- table.pqtl %>% filter(Cytokine %in% targets.prots.tot) %>% mutate(chr = as.numeric(gsub("chr", "", chrom))) # also keep the chrom number as numeric
+
+list.folder <- list.dirs(path = "./data/Somalogic", full.names = TRUE, recursive = TRUE) # Listing all the folders of the somalogic data
+
+df.analyse <- data.frame(SNP = table.pqtl$rsID) # Creating a void dataframe to store the results
+table.pqtl <- table.pqtl %>%  # creating some extra variables to make the selection easier in the loop
+                  mutate(rs_ID_prot = paste0(rsID, "_", Cytokine)) %>% 
+                  mutate(Variant_ID = paste0(as.character(chr), "_", as.character(chromEnd))) %>% 
+                  mutate(Variant_ID_prot = paste0(Variant_ID, "_", Cytokine))
+
+rownames(df.analyse) <- table.pqtl$Variant_ID_prot
+
+df.not.matched <- data.frame()
+
+for (prt in targets.prots.tot){ # Loop on the prots of interests regarding the SNPs
+  
+  mask.prot <- str_detect(list.folder, prt) # Get the index of the folders who contains the name of the protein
+  les.paths <- list.folder[mask.prot] # Keeping the folders with the name of the prot/gene of interest in
+  
+  snps.to.look <- table.pqtl %>% filter(Cytokine == prt) %>% arrange(chr) # Subset of SNPs that correspond to the prot
+  
+  for (i in 1:length(les.paths)){ # Loop over the folder containing the name of the prot of interest. 
+                                  # (Most of the time length(les.paths) == 1, but in some cases length(les.paths) > 1)
+    
+    folder <- les.paths[i] # Selecting one of the different folder containing the name of the prot
+    
+    for (rs in snps.to.look$Variant_ID_prot){ # Looping over all the SNPs for a given prot
+      
+      snp.to.capture <- snps.to.look %>% filter(Variant_ID_prot == rs) # Selecting data for the corresponding SNP
+      
+      cr <- snp.to.capture$chr # setting the number of the chromosome to select the files
+      
+      file.to.capture <- list.files(path = folder, 
+                                    pattern = paste0("chrom_", as.character(cr), "_")
+                                    ) # Getting the name of the file for the corresponding chromosome
+      
+      df.chrom <- read.csv(file = paste0(folder, "/", file.to.capture[1]),
+                           header = T, 
+                           sep = "\t") # Opening the file for the right chromosome.
+      
+      pos <- snp.to.capture$chromEnd # Get the position of the SNP of interest
+      res <- df.chrom %>% filter(position == pos) # Now that we have the chrom and position of the SNP, we can extract the data from the SomaLogic data base
+      
+      # Now we're going to compare if the alleles match for the position.
+      # To make the comparison easier, we put the alleles in the same format (upper case and lexicographic order)
+      alleles.to.capture <- c(toupper(snp.to.capture$allele1),  # Converting alleles values to upper case 
+                              toupper(snp.to.capture$allele2))
+      alleles.to.capture <- alleles.to.capture[order(alleles.to.capture)] # Ordering the alleles to compare between our file and the file Somalogic
+      
+      if (nrow(res) == 1){ # if nrow == 1, then we just check if the alleles are the same, if yes we add the result to the df.analyse, otherwise we add nothing
+        # Same format for the SomaLogic alleles than for the one in the snps.table 
+        alleles.res <- c(toupper(res$Allele1),
+                         toupper(res$Allele2))
+        alleles.res <- alleles.res[order(alleles.res)] # lexicographic order
+        
+        if (nchar(alleles.res[2]) > 1){
+          substr(alleles.res[1], 1, 1) <- "-"
+          alleles.res[2] <- substring(alleles.res[2], 2)
+        }
+        
+        
+        if (lequal(alleles.to.capture, alleles.res)){ # if the alleles are indeed equal, then we collect the data on the pval and effect of the SNP
+          df.analyse[rs, c("Allele1", "Allele2", "QTLtype", "Effect",
+                           "logP", "prot", "Alleleres1", "Alleleres2")] <- c(snp.to.capture$allele1, snp.to.capture$allele2, 
+                                                                             snp.to.capture$cistrans, res$Effect, res$log.P., prt, alleles.res)
+        }
+        else{
+          print(c(snp.to.capture$SNP.id, snp.to.capture$Variant_ID_prot))
+          print(c("Alleles db", alleles.to.capture))
+          print(c("Alleles res", alleles.res))
+          df.not.matched[rs, c("Alleles_A_1", "Alleles_A_2", 
+                               "Alleles_B_1", "Alleles_B_2")] <- c(alleles.to.capture, alleles.res)
+          df.analyse[rs, c("Allele1", "Allele2", "QTLtype", "Effect",
+                           "logP", "prot", "Alleleres1", "Alleleres2")] <- c(snp.to.capture$allele1, snp.to.capture$allele2, 
+                                                                             snp.to.capture$cistrans, res$Effect, res$log.P., prt, alleles.res)
+        }
+        pqtlasso.res[which(pqtlasso.res$Cytokine == snp.to.capture$Cytokine & pqtlasso.res$rsID == snp.to.capture$rsID), "pvalue"] <- 10^(res$log.P.)
+        
+      }
+      else if (nrow(res > 1)){ # if the nrow > 1, we need to find the which allele correspond to the snp
+        # Here we'll get through all the line of the variations for a given position and check if we find the corresponing SNP
+        print(nrow(res))
+        line.allele <- 1
+        alleles.res <- c(toupper(res$Allele1[1]), # Once again setting the same format to compare the alleles
+                         toupper(res$Allele2[1]))
+        alleles.res <- alleles.res[order(alleles.res)]
+        # As long as the alleles differ and that we're still in the range of the number of different variations at the given position.
+        while( ( !lequal(alleles.res, alleles.to.capture) ) && ( line.allele < ( nrow(res) ) ) ){
+          line.allele <- line.allele + 1 # incr the line
+          alleles.res <- c(toupper(res$Allele1[line.allele]),
+                           toupper(res$Allele2[line.allele]))
+          alleles.res <- alleles.res[order(alleles.res)]
+        }
+        if (lequal(alleles.res, alleles.to.capture)){ # Once we finally found the right alleles we take the information
+          df.analyse[rs, c("Allele1", "Allele2", "QTLtype", "Effect", "logP", "prot", "Alleleres1", "Alleleres2")] <- c(snp.to.capture$allele1, 
+                                                                                            snp.to.capture$allele2, snp.to.capture$cis.trans,
+                                                                                            res$Effect[line.allele], res$log.P.[line.allele],
+                                                                                            prt, alleles.res)
+        }
+      }
+      
+    }
+    
+  }
+  
+}
+```
+
+```{r}
+write.table(pqtlasso.res, file = "./results/SomalogicResults.csv", row.names = F, col.names = T)
+```
+
+### Plotting the results
+
+```{r}
+df.analyse.plot <- df.analyse %>% filter(!is.na(logP)) %>% 
+                                  mutate(log.P = abs(as.numeric(logP)))  %>%  
+                                  arrange((log.P)) %>% 
+                                  mutate(SNP_prot = paste0(SNP,"_",prot))
+
+df.analyse.plot$SNP_prot <- factor(df.analyse.plot$SNP_prot, levels = df.analyse.plot$SNP_prot)
+
+df.analyse.plot %>% ggplot(aes(x = SNP_prot, y = log.P, fill = SNP_prot)) +
+          geom_bar(stat="identity") + 
+          scale_fill_manual(values = c("rs6815814_IL2" = "#F0A0FF", "rs72636686_IL6" = "#0075DC", "rs4833095_IFNG" = "#993F00", 
+                                       "rs1518110_IL10" = "#4C005C", "rs3775291_IL1B" = "#FF5005", "rs3775291_IFNG" = "#005C31", 
+                                       "rs1801274_IL2" = "#2BCE48", "rs4833095_IL2" = "#FFCC99", "rs2564594_IFNG" = "#990000", 
+                                       "rs352045_IFNG" = "#94FFB5", "rs3775291_IL6" = "#8F7C00", "rs10034903_IL6" = "#9DCC00", 
+                                       "rs11936050_IL6" = "#C20088", "rs3764613_IL1B" = "#003380", "rs10013453_CXCL5" = "#FFA405", 
+                                       "rs10779330_CXCL5" = "#FFA8BB", "rs10822168_CXCL5" = "#426600", "rs62449491_IL6" = "#FF0010",
+                                       "rs2393969_CXCL5" = "#5EF1F2", "rs3775291_IL12A" = "#00998F", "rs35345753_IL6" = "#FFE100",
+                                       "rs352045_CXCL5" = "#740AFF")
+                            )+
+          geom_hline(yintercept = -log10(0.05), linetype = "dashed", col = "black") +
+          geom_hline(yintercept = -log10(0.01), linetype = "dotted", col = "black") +
+          scale_y_continuous(expand = c(0,0)) +
+          # ggpubr::theme_pubr() + 
+          theme_classic()+
+          theme(legend.position = "none") +
+          theme(axis.text.x = element_text(size = 12), 
+                axis.text.y = element_text(size = 7),
+                axis.title.x = element_text(size = 16),
+                axis.title.y = element_text(size = 16)) +
+          ylab("-log10(p)") +
+          xlab("SNP") + 
+          coord_flip()
+ggsave("./plots/SNPeffects/SomaLogic_association_SNPSpaper_priliminary_1.pdf", width = 7, height = 10)
+```
+
+See which are novel associations (i.e. not associated in the Somalogic database)
+
+```{r}
+pqtlasso.tot <- pqtlasso %>% mutate(rs_prot = paste0(rsID, "_", Cytokine)) # Creating a colmun with information on SNP and Cytokine
+
+df.analyse.plot <- df.analyse.plot %>% mutate(pval = 10^(-log.P)) %>% # Create a column containing the pval
+
+df.asso <- merge(pqtlasso.tot %>% select(rs_prot), 
+                 df.analyse.plot %>% select(SNP_prot, pval),
+                 all.x = T,
+                 by.x = "rs_prot", by.y = "SNP_prot") # Merging the two tables
+
+df.new <- df.asso %>% mutate(is.new = case_when(is.na(pval) ~ "Yes",
+                                                pval >= 0.05 ~ "Yes", 
+                                                pval < 0.05 ~ "No") # Creating a column indicating if the association was already documented
+                             ) %>%
+                      filter(is.new == "Yes") %>% # Select the new associations
+                      select(!is.new) %>%
+                      separate(rs_prot, c("rsID", "prot"), sep = "_", remove = F)
+```
+
+## Same study with the LD genes.
+
+### Threshold r2 > 0.8
+
+```{r}
+thrshold <- 0.8 # set thresholmd for SNPs
+lsnp <- unique(table.pqtl$rsID) # List of SNPs for which we want to get the LD SNPs
+
+l.stock <- list()
+
+for (snp in lsnp){ # loop over all the SNPs
+  
+  path <- paste0("./data/LD/", snp, ".xls") # Get the path and file names for LD data for the corresponding SNP
+  
+  df <- ensemble.LD.datatransformation(path) # Load + Transformation of the LD data
+  
+  # The SNP of interests is denoted by *rs....*, here one needs to remove the *
+  colnames(df) <- lapply(colnames(df), function(x) gsub("\\*", "", x)) 
+  df$SNP <- lapply(df$SNP, function(x) gsub("\\*", "", x)) 
+  
+  df <- df[, c("SNP", snp)]
+  colnames(df) <- c("SNP", "snp.to.study")
+  l.stock[[snp]] <- unlist(df %>% 
+                              filter(snp.to.study > thrshold) %>% # Get the SNPS with a strong LD (r2 > thrshold)
+                              pull(SNP)) # Extrat and push the results to the list
+}
+# l.stock # Display the results
+df.summary.ld <- data.frame(SNP.id = lsnp)
+S <- 0
+for (snp in lsnp){
+  df.summary.ld[which(df.summary.ld$SNP.id == snp), "Number of LD"] <- length(l.stock[[snp]])
+  S <- S + length(l.stock[[snp]])
+}
+print(S)
+kable(df.summary.ld)
+```
+
+```{bash}
+mysql --user=genome --host=genome-mysql.soe.ucsc.edu -A -P 3306 -D hg19 -e 'select chrom,chromStart,chromEnd,name,alleles,alleleFreqs from snp150 where name in ("rs28532329","rs10010930","rs11735251","rs11734342","rs11340781","rs7653908","rs11340782","rs11725309","rs28393318","rs10012017","rs10004195","rs201228097","rs200395112","rs73142654","rs7658651","rs7664239","rs55903115","rs73236615","rs12233670","rs67719080","rs6834581","rs35005076","rs28690449","rs1135430","rs11936050","rs73236616","rs4833093","rs145731598","rs6531663","rs4543123","rs73236617","rs73236618","rs2274567","rs35561139","rs9660194","rs6687175","rs12034598","rs11118131","rs3738468","rs34011300","rs9793438","rs200766448","rs609297","rs596319","rs6672474","rs143616521","rs11118135","rs4844608","rs4844382","rs594955","rs12141045","rs11118136","rs10761752","rs10761753","rs34309561","rs7912893","rs7896783","rs10761756","rs10761758","rs11438680","rs12734315","rs11117956","rs7512361","rs4844601","rs12043913","rs3844496","rs11340781","rs7653908","rs11340782","rs11725309","rs28393318","rs10012017","rs10034903","rs10004195","rs201228097","rs200395112","rs73142654","rs7658651","rs7664239","rs55903115","rs73236615","rs12233670","rs67719080","rs6834581","rs35005076","rs28690449","rs1135430","rs73236616","rs4833093","rs145731598","rs6531663","rs4543123","rs73236617","rs73236618","rs3924112","rs3924113","rs5743618","rs5743614","rs17753641","rs17810546","rs1518111","rs3024490","rs1800872","rs1800871","rs7551957","rs12139150","rs6671847","rs4657041","rs10546984","rs7923609","rs2893919","rs2393966","rs7076310","rs4310508","rs7910927","rs10995527","rs9414801","rs394408","rs447206","rs3048320","rs168449","rs191601","rs193263","rs442155","rs377579","rs352009","rs183028","rs352010","rs35033774","rs552582","rs2457996","rs187080","rs34254376","rs426901","rs409336","rs440676","rs450373","rs33935231","rs420389","rs2437285","rs352047","rs425535","rs352046","rs352045","rs35033774","rs552582","rs2457996","rs187080","rs34254376","rs426901","rs409336","rs440676","rs450373","rs2564594","rs33935231","rs420389","rs2437285","rs352047","rs425535","rs352046","rs164758","rs187082","rs1476483","rs2097676","rs34788132","rs34743674","rs34198632","rs13240836","rs62447657","rs35225842","rs35140375","rs62449486","rs4386870","rs62449489","rs62449491","rs35782497","rs13137589","rs35103715","rs12641237","rs34357460","rs2090631","rs4833093","rs145731598","rs6531663","rs4543123","rs73236617","rs73236618","rs3924112","rs3924113","rs5743618","rs5743614","rs5743604","rs5743595","rs5743593","rs5743592","rs4540055","rs5743585","rs5743584","rs5743580","rs5743571","rs5743566","rs5743565","rs5743563","rs5743562","rs5743560","rs56357984","rs5743557","rs5743556","rs45588337","rs55830619","rs5743551","rs11464936","rs67206233","rs9306967","rs113465719","rs112318878","rs113558549","rs114719937","rs199704972","rs4833096","rs186803729","rs4833097","rs200921532","rs7378375","rs35345753","rs34743674","rs34198632","rs13240836","rs62447657","rs35225842","rs35140375","rs62449486","rs62449487","rs4386870","rs62449489","rs56357984","rs5743557","rs5743556","rs45588337","rs55830619","rs5743551","rs11464936","rs67206233","rs9306967","rs113465719","rs112318878","rs113558549","rs114719937","rs199704972","rs4833096","rs186803729","rs4833097","rs200921532","rs7378375","rs73236625","rs189688666","rs4833100","rs4833101","rs199587947","rs539299375","rs67837551","rs200805729","rs11722788","rs11722813","rs11722889","rs11727978","rs11722836","rs2101521","rs11725779","rs56289835","rs56408159","rs66922907","rs17616434","rs66979032","rs66819621","rs67712706","rs73236628","rs73236629","rs72636671","rs3765398","rs72636679","rs3765391","rs111347115","rs72636687","rs6669661","rs6684855","rs6693267","rs6682312","rs6695860","rs72636689","rs139508489","rs113337730");' | sed "s/'/\'/;s/\t/\",\"/g;s/^/\"/;s/$/\"/;s/\n//g" > ./results/out_all_LD_08.csv
+```
+
+```{r}
+ld08.snp.meta <- read.csv("./results/out_all_LD_08.csv",
+                        header = T, 
+                        sep = ",")
+
+df.snp.ld08.map <- data.frame(SNP.ref = rep("", length(unlist(l.stock))), 
+                              SNP.ld = rep("", length(unlist(l.stock))))
+
+colnames(df.snp.ld08.map) <- c("SNP.ref", "SNP.ld")
+
+j <- 0
+for (snp.interest in names(l.stock)){
+  lds <- l.stock[[snp.interest]]
+  for (ld in lds){
+    j <-  j + 1
+    df.snp.ld08.map[j, ] <- c(snp.interest, ld)
+  }
+}
+
+ld08.snp.meta <- merge(ld08.snp.meta, df.snp.ld08.map, 
+                     by.x = "name", by.y = "SNP.ld")
+
+colnames(ld08.snp.meta)[1] <- "SNP.id"
+
+ld08.snp.meta <- ld08.snp.meta %>% 
+                  arrange(SNP.ref) %>% 
+                  mutate(Variant_ID = paste0(gsub("chr", "", chrom), "_", as.character(chromEnd))) %>% 
+                  mutate(chr = as.numeric(gsub("chr", "", chrom))) %>% 
+                  relocate(chr, .after = chrom) %>% 
+                  mutate(alleles = gsub(",$", "", alleles)) %>% 
+                  separate(alleles, c("allele1", "allele2"), sep = ",") %>% 
+                  mutate(alleleFreqs = gsub(",$", "", alleleFreqs)) %>% 
+                  separate(alleleFreqs, c("allele1.prop", "allele2.prop"), sep = ",") %>% 
+                  mutate(allele1.prop = as.numeric(allele1.prop)) %>% 
+                  mutate(allele2.prop = as.numeric(allele2.prop))
+
+df.snp.ld08 <- merge(ld08.snp.meta, table.pqtl %>% select(rsID, cistrans, Cytokine), by.x = "SNP.ref", by.y = "rsID")
+df.snp.ld08 <- df.snp.ld08 %>% mutate(Variant_ID_prot = paste0(Variant_ID,"_", Cytokine))
+```
+
+Checking which of the LD snps are associated with the cytokines.
+
+```{r}
+df.snp.ld08 <- df.snp.ld08 %>% mutate(ref_variant_id_prot = paste0(SNP.ref, "_", Variant_ID_prot))
+df.analyse <- df.snp.ld08 %>% select(c("SNP.ref", "SNP.id", "Variant_ID_prot", "ref_variant_id_prot")) 
+rownames(df.analyse) <- df.analyse$ref_variant_id_prot
+
+for (prt in targets.prots){
+  print(prt)
+  
+  mask.prot <- str_detect(list.folder, prt)
+  les.paths <- list.folder[mask.prot]
+  
+  snps.to.look <- df.snp.ld08 %>% filter(Cytokine == prt) %>% arrange(chr)
+  
+  for (i in 1:length(les.paths)){
+    
+    folder <- les.paths[i]
+    
+    for (rs in snps.to.look$ref_variant_id_prot){
+      
+      snp.to.capture <- snps.to.look %>% filter(ref_variant_id_prot == rs)
+      
+      cr <- snp.to.capture$chr
+      file.to.capture <- list.files(path = folder, pattern = paste0("chrom_", as.character(cr), "_"))
+      df.chrom <- read.csv(file = paste0(folder, "/", file.to.capture[1]),
+                           header = T, 
+                           sep = "\t") # Opening the file for the corresponding chromosome and prot
+      
+      pos <- snp.to.capture$chromEnd
+      res <- df.chrom %>% filter(position == pos)
+      
+      alleles.to.capture <- c(toupper(snp.to.capture$allele1), 
+                              toupper(snp.to.capture$allele2))
+      alleles.to.capture <- alleles.to.capture[order(alleles.to.capture)]
+      
+      if (nrow(res) == 1){ # if nrow == 1, then we just check if the alleles are the same, if yes we add the result to the df.analyse, otherwise we add nothing
+        alleles.res <- c(toupper(res$Allele1),
+                         toupper(res$Allele2))
+        alleles.res <- alleles.res[order(alleles.res)]
+        
+        if (nchar(alleles.res[2]) > 1){
+          substr(alleles.res[1], 1, 1) <- "-"
+          alleles.res[2] <- substring(alleles.res[2], 2)
+        }
+        
+        
+        if (lequal(alleles.to.capture, alleles.res)){
+          df.analyse[rs, c("Allele1", "Allele2", "QTLtype", "Effect",
+                           "logP", "prot", "Allelesres1", "Allelesres2")] <- c(snp.to.capture$allele1, snp.to.capture$allele2, 
+                                                                               snp.to.capture$cistrans,res$Effect, res$log.P.,
+                                                                               prt, alleles.res)
+        }
+        else{
+          print(c(snp.to.capture$SNP.id, snp.to.capture$Variant_ID_prot))
+          print(c("Alleles db", alleles.to.capture))
+          print(c("Alleles res", alleles.res))
+          df.analyse[rs, c("Allele1", "Allele2", "QTLtype", "Effect",
+                           "logP", "prot", "Allelesres1", "Allelesres2")] <- c(snp.to.capture$allele1, snp.to.capture$allele2, 
+                                                                               snp.to.capture$cistrans,res$Effect, res$log.P.,
+                                                                               prt, alleles.res)
+        }
+      }
+      else if (nrow(res > 1)){ # if the nrow > 1, we need to find the which allele correspond to the snp
+        print(nrow(res))
+        line.allele <- 1
+        alleles.res <- c(toupper(res$Allele1[1]),
+                         toupper(res$Allele2[1]))
+        alleles.res <- alleles.res[order(alleles.res)]
+        while( ( !lequal(alleles.res, alleles.to.capture) ) && ( line.allele < ( nrow(res) ) ) ){
+          line.allele <- line.allele + 1
+          alleles.res <- c(toupper(res$Allele1[line.allele]),
+                           toupper(res$Allele2[line.allele]))
+          alleles.res <- alleles.res[order(alleles.res)]
+        }
+        if (lequal(alleles.res, alleles.to.capture)){
+          df.analyse[rs, c("Allele1", "Allele2", "QTLtype", "Effect",
+                           "logP", "prot", "Allelesres1", "Allelesres2")] <- c(snp.to.capture$allele1, snp.to.capture$allele2, 
+                                                                               snp.to.capture$cistrans,res$Effect, res$log.P.,
+                                                                               prt, alleles.res)
+        }
+      }
+    }
+    
+  }
+  
+}
+
+df.analyse.plot.complete <- df.analyse %>% filter(!is.na(logP)) %>% 
+                                  mutate(log.P = abs(as.numeric(logP))) %>% 
+                                  group_by(SNP.ref) %>% 
+                                  arrange(desc(log.P)) %>% 
+                                  subset(!duplicated(SNP.id)) %>% 
+                                  arrange(log.P, .by_group = F) %>% 
+                                  mutate(SNP_prot = paste0(SNP.id, "_", prot))
+
+df.analyse.plot.complete$SNP_prot <- factor(df.analyse.plot.complete$SNP_prot, levels = unique(df.analyse.plot.complete$SNP_prot))
+df.analyse.plot.complete$SNP.ref <- factor(df.analyse.plot.complete$SNP.ref, levels = rev(unique(df.analyse.plot.complete$SNP.ref)))
+
+df.analyse.plot.complete %>% ggplot(aes(x = SNP_prot, y = log.P, fill = SNP.ref)) +
+                    geom_bar(stat="identity") + # Hist
+                    scale_fill_manual(values = c("rs6815814" = "#F0A0FF", "rs72636686" = "#0075DC",
+                                       "rs1518110" = "#4C005C", "rs3775291" = "#FF5005", 
+                                       "rs1801274" = "#2BCE48", "rs4833095" = "#FFCC99", "rs2564594" = "#990000", 
+                                       "rs10034903" = "#9DCC00", 
+                                       "rs11936050" = "#C20088", "rs3764613" = "#003380", "rs10013453" = "#FFA405", 
+                                       "rs10779330" = "#FFA8BB", "rs10822168" = "#426600", "rs62449491" = "#FF0010",
+                                       "rs2393969" = "#5EF1F2", "rs35345753" = "#FFE100",
+                                       "rs352045" = "#740AFF")
+                            )+
+                    geom_hline(yintercept = -log10(0.05), linetype = "dashed", col = "black") +
+                    geom_hline(yintercept = -log10(0.01), linetype = "dotted", col = "black") +
+                    scale_y_continuous(expand = c(0,0)) +
+                    # ggpubr::theme_pubr() + 
+                    theme_classic()+
+                    theme(axis.text.x = element_text(size = 12), 
+                          axis.text.y = element_text(size = 4),
+                          axis.title.x = element_text(size = 16),
+                          axis.title.y = element_text(size = 16)) +
+                    ylab("-log10(p)") +
+                    xlab("SNP") + 
+                    labs(fill = "SNP of reference for LD") +
+                    coord_flip()
+ggsave("./plots/SNPeffects/LD08effect_complete_1.pdf", 
+       device = "pdf", 
+       width = 7,
+       height = 10)
+```
+
+### Threshold r2 > 0.2
+
+```{r}
+thrshold <- 0.2
+lsnp <- unique(table.pqtl$rsID)
+
+l.stock <- list()
+
+for (snp in lsnp){
+  
+  path <- paste0("./data/LD/", snp, ".xls")
+  
+  df <- ensemble.LD.datatransformation(path)
+  
+  # The SNP of interests is denoted by *rs....*, here one needs to remove the *
+  colnames(df) <- lapply(colnames(df), function(x) gsub("\\*", "", x)) 
+  df$SNP <- lapply(df$SNP, function(x) gsub("\\*", "", x)) 
+  
+  df <- df[, c("SNP", snp)]
+  colnames(df) <- c("SNP", "snp.to.study")
+  l.stock[[snp]] <- unlist(df %>% 
+                              filter(snp.to.study > thrshold) %>% # Get the SNPS with a strong LD (r2 > thrshold)
+                              pull(SNP))
+}
+
+df.summary.ld <- data.frame(SNP.id = lsnp)
+S <- 0
+for (snp in lsnp){
+  df.summary.ld[which(df.summary.ld$SNP.id == snp), "Number of LD"] <- length(l.stock[[snp]])
+  S <- S + length(l.stock[[snp]])
+}
+print(S)
+kable(df.summary.ld)
+```
+
+```{r}
+les.snps <- names(l.stock)
+nmax <- length(les.snps)
+final.name <- les.snps[nmax]
+
+str.to.write <- "(" # The list must start by ( and finish by a )
+for (snp in names(l.stock)){ 
+  vec.to.write <- l.stock[[snp]] # SNP to add to the list
+  if (snp != final.name){ # As long as it's not the las snp of the list, we add it in the format `"rsXXXXXX",`
+    for (i in 1:length(vec.to.write)){
+      str.to.write <- paste0(str.to.write, 
+                           '"', 
+                           vec.to.write[i], 
+                           '",')
+    }
+  }
+  else{
+    for (i in 1:length(vec.to.write)){
+      if (i < length(vec.to.write)){
+        str.to.write <- paste0(str.to.write, 
+                             '"', 
+                             vec.to.write[i], 
+                             '",')
+      }
+      else{
+        str.to.write <- paste0(str.to.write, # if it's the last, we don't add a "," after 
+                             '"', 
+                             vec.to.write[i], 
+                             '"')
+      }
+    }
+  }
+}
+
+str.to.write <- paste0(str.to.write, ")") # and we close the ) of the list.
+write(str.to.write, paste0("./results/LD_snps_all_thrshold_",as.character(thrshold),".txt")) # Write data in a text file
+```
+
+```{bash}
+mysql --user=genome --host=genome-mysql.soe.ucsc.edu -A -P 3306 -D hg19 -e 'select chrom,chromStart,chromEnd,name,alleles,alleleFreqs from snp150 where name in ("rs6823906","rs11724317","rs11725233","rs6824105","rs73234989","rs72624129","rs200982249","rs202170615","rs111066797","rs111066798","rs111065428","rs138930334","rs73234991","rs138475301","rs139481351","rs11723816","rs11728049","rs11724689","rs55649498","rs6853255","rs6834781","rs73234992","rs111677487","rs74809218","rs73234995","rs5016212","rs6841698","rs4565087","rs4482773","rs10023850","rs10024216","rs112133277","rs112924608","rs10019853","rs10017482","rs10019951","rs10008492","rs10020220","rs11736207","rs11721824","rs6531661","rs6531662","rs4470638","rs4458462","rs4302471","rs10470854","rs28413898","rs73235002","rs4331786","rs6832466","rs6837838","rs28532329","rs10010930","rs140661555","rs115820155","rs11735251","rs11734337","rs11734342","rs10776482","rs4129009","rs10776483","rs11096955","rs11096956","rs11096957","rs4274855","rs11466645","rs11466640","rs7694115","rs112855872","rs140633479","rs11466617","rs11340781","rs7653908","rs11340782","rs7658893","rs11725309","rs28393318","rs10012017","rs10004195","rs201228097","rs200395112","rs73142654","rs7658651","rs7664239","rs55903115","rs73236615","rs12233670","rs67719080","rs6834581","rs35005076","rs28690449","rs1135430","rs11936050","rs73236616","rs4833093","rs145731598","rs6531663","rs4543123","rs73236617","rs73236618","rs614709","rs2274567","rs35561139","rs9660194","rs9659222","rs6687175","rs12034598","rs646817","rs1752688","rs1746659","rs10636258","rs11118131","rs3738468","rs34011300","rs9793438","rs200766448","rs609297","rs608282","rs596319","rs6672474","rs143616521","rs11118135","rs4844608","rs4844382","rs594955","rs12141045","rs11118136","rs10740122","rs34927826","rs34730656","rs67453614","rs10822167","rs10761752","rs12780983","rs10761753","rs34309561","rs7912893","rs7896783","rs35468796","rs10740123","rs34028683","rs34453858","rs7915339","rs10822170","rs10761755","rs10761756","rs10761757","rs10761758","rs2393971","rs11438680","rs12567973","rs12567990","rs11117949","rs11371768","rs12039306","rs12734315","rs11117956","rs11117959","rs6540435","rs7512361","rs6690576","rs12130494","rs3991751","rs3991752","rs4433395","rs4844601","rs12043913","rs11117991","rs3860292","rs3844496","rs140633479","rs11466617","rs11340781","rs7653908","rs11340782","rs7658893","rs11725309","rs28393318","rs10012017","rs10034903","rs10004195","rs201228097","rs200395112","rs73142654","rs7658651","rs7664239","rs55903115","rs73236615","rs12233670","rs67719080","rs6834581","rs35005076","rs28690449","rs1135430","rs73236616","rs4833093","rs145731598","rs6531663","rs4543123","rs73236617","rs73236618","rs3924112","rs3924113","rs5743618","rs5743614","rs17753641","rs547150586","rs17810546","rs3024502","rs3024500","rs3024496","rs1878672","rs1554286","rs1518111","rs3024491","rs3024490","rs2222202","rs1800872","rs1800871","rs1800896","rs1800893","rs3001101","rs2945417","rs11119514","rs11119515","rs10494879","rs7551957","rs12139150","rs10800309","rs10800314","rs61802846","rs34961491","rs7522794","rs9427065","rs9427397","rs9427398","rs9427399","rs7515174","rs11291975","rs7539468","rs9427400","rs7532275","rs7518087","rs35406997","rs35855160","rs6671753","rs4656308","rs11464104","rs6671847","rs4657041","rs7529225","rs7552317","rs7529425","rs11810143","rs2165088","rs12142756","rs373579","rs1542042","rs10546984","rs2393967","rs7923609","rs35693916","rs2893919","rs2393966","rs7076310","rs4310508","rs17740722","rs7910927","rs10995527","rs9414801","rs34365599","rs394408","rs447206","rs3048320","rs168449","rs191601","rs193263","rs442155","rs377579","rs352009","rs183028","rs352010","rs35033774","rs552582","rs2457996","rs187080","rs34254376","rs426901","rs409336","rs416046","rs2472649","rs440676","rs450373","rs33935231","rs420389","rs138516538","rs12512838","rs12505025","rs2437285","rs352047","rs425535","rs352046","rs352045","rs352010","rs35033774","rs552582","rs2457996","rs187080","rs34254376","rs426901","rs409336","rs416046","rs2472649","rs440676","rs450373","rs2564594","rs33935231","rs420389","rs138516538","rs12512838","rs12505025","rs2437285","rs352047","rs425535","rs352046","rs164758","rs187082","rs11729931","rs2115693","rs2905342","rs1476483","rs34655289","rs34703153","rs12700385","rs2097676","rs2097677","rs34893038","rs34283665","rs2961313","rs7802442","rs34788132","rs59084784","rs4722167","rs61336419","rs4321884","rs11329656","rs34743674","rs34075886","rs34198632","rs35633500","rs13240836","rs62447656","rs13241897","rs62447657","rs35225842","rs35140375","rs13242809","rs62449486","rs62449487","rs4506102","rs35044877","rs34680848","rs7455069","rs4386870","rs7383869","rs62449489","rs62449490","rs62449491","rs62449492","rs45587933","rs4803937","rs1024782","rs56203900","rs73043492","rs1143438","rs35801370","rs11349039","rs113815217","rs2075145","rs58701793","rs12609390","rs759290","rs3815505","rs8106745","rs8106592","rs8811","rs741231","rs741233","rs2110577","rs2110578","rs13126816","rs6552949","rs6552950","rs6811484","rs3775295","rs6817329","rs35990575","rs35782497","rs28524783","rs10025405","rs13137589","rs1519312","rs35103715","rs4608848","rs12641237","rs7676239","rs6857650","rs34357460","rs2090631","rs4862635","rs6821294","rs6821499","rs10028114","rs10020072","rs4833093","rs145731598","rs6531663","rs4543123","rs73236617","rs73236618","rs3924112","rs3924113","rs5743618","rs5743614","rs5743604","rs5743597","rs5743596","rs5743595","rs5743593","rs5743592","rs4540055","rs5743585","rs5743584","rs5743580","rs5743571","rs5743566","rs5743565","rs5743563","rs5743562","rs5743560","rs56357984","rs5743557","rs5743556","rs45588337","rs55830619","rs5743551","rs11464936","rs67206233","rs9306967","rs113465719","rs112318878","rs113558549","rs114719937","rs199704972","rs4833096","rs186803729","rs4833097","rs200921532","rs7378375","rs186390355","rs59952081","rs10004851","rs59084784","rs4722167","rs35345753","rs61336419","rs4321884","rs11329656","rs34743674","rs34075886","rs34198632","rs35633500","rs13240836","rs62447656","rs13241897","rs62447657","rs35225842","rs35140375","rs13242809","rs62449486","rs62449487","rs4506102","rs35044877","rs34680848","rs7455069","rs4386870","rs7383869","rs62449489","rs62449490","rs62449492","rs62449493","rs4719711","rs4719712","rs1404008","rs35093685","rs6461662","rs6963591","rs6963866","rs1546762","rs1546763","rs62449494","rs7805828","rs4719713","rs56357984","rs5743557","rs5743556","rs45588337","rs55830619","rs5743551","rs11464936","rs67206233","rs9306967","rs113465719","rs112318878","rs113558549","rs114719937","rs199704972","rs4833096","rs186803729","rs4833097","rs200921532","rs7378375","rs186390355","rs59952081","rs10004851","rs4833099","rs183633692","rs73236625","rs200877197","rs189688666","rs4833100","rs4833101","rs199587947","rs539299375","rs67837551","rs200805729","rs11722788","rs11722813","rs11722889","rs11727978","rs11722836","rs2101521","rs11725779","rs56289835","rs56408159","rs66922907","rs17616434","rs66979032","rs4833103","rs66819621","rs67712706","rs7696175","rs2089128","rs2089127","rs10452136","rs73236628","rs73236629","rs7664687","rs6822503","rs72636667","rs72636669","rs72636671","rs3765398","rs72636679","rs3765391","rs111347115","rs7536655","rs72636687","rs6669661","rs6684855","rs6693267","rs6682312","rs6695860","rs72636689","rs139508489","rs2011956","rs6429678","rs10927551","rs113337730");' | sed "s/'/\'/;s/\t/\",\"/g;s/^/\"/;s/$/\"/;s/\n//g" > ./results/out_all_LD_02.csv
+```
+
+```{r}
+ld02.snp.meta <- read.csv("./results/out_all_LD_02.csv",
+                        header = T, 
+                        sep = ",")
+
+df.snp.ld02.map <- data.frame(SNP.ref = rep("", length(unlist(l.stock))), 
+                              SNP.ld = rep("", length(unlist(l.stock))))
+
+colnames(df.snp.ld02.map) <- c("SNP.ref", "SNP.ld")
+
+j <- 0
+for (snp.interest in names(l.stock)){
+  lds <- l.stock[[snp.interest]]
+  for (ld in lds){
+    j <-  j + 1
+    df.snp.ld02.map[j, ] <- c(snp.interest, ld)
+  }
+}
+
+ld02.snp.meta <- merge(ld02.snp.meta, df.snp.ld02.map, 
+                     by.x = "name", by.y = "SNP.ld")
+
+colnames(ld02.snp.meta)[1] <- "SNP.id"
+
+ld02.snp.meta <- ld02.snp.meta %>% 
+                  arrange(SNP.ref) %>% 
+                  mutate(Variant_ID = paste0(gsub("chr", "", chrom), "_", as.character(chromEnd))) %>% 
+                  mutate(chr = as.numeric(gsub("chr", "", chrom))) %>% 
+                  relocate(chr, .after = chrom) %>% 
+                  mutate(alleles = gsub(",$", "", alleles)) %>% 
+                  separate(alleles, c("allele1", "allele2"), sep = ",") %>% 
+                  mutate(alleleFreqs = gsub(",$", "", alleleFreqs)) %>% 
+                  separate(alleleFreqs, c("allele1.prop", "allele2.prop"), sep = ",") %>% 
+                  mutate(allele1.prop = as.numeric(allele1.prop)) %>% 
+                  mutate(allele2.prop = as.numeric(allele2.prop))
+
+df.snp.ld02 <- merge(ld02.snp.meta, table.pqtl %>% select(rsID, cistrans, Cytokine), by.x = "SNP.ref", by.y = "rsID")
+df.snp.ld02 <- df.snp.ld02 %>% mutate(Variant_ID_prot = paste0(Variant_ID,"_", Cytokine))
+```
+
+Checking which of the LD snps are associated with the cytokines.
+
+```{r}
+df.snp.ld02 <- df.snp.ld02 %>% mutate(ref_variant_id_prot = paste0(SNP.ref, "_", Variant_ID_prot))
+df.analyse <- df.snp.ld02 %>% select(c("SNP.ref", "SNP.id", "Variant_ID_prot", "ref_variant_id_prot")) 
+rownames(df.analyse) <- df.analyse$ref_variant_id_prot
+
+for (prt in targets.prots){
+  print(prt)
+  
+  mask.prot <- str_detect(list.folder, prt)
+  les.paths <- list.folder[mask.prot]
+  
+  snps.to.look <- df.snp.ld02 %>% filter(Cytokine == prt) %>% arrange(chr)
+  
+  for (i in 1:length(les.paths)){
+    
+    folder <- les.paths[i]
+    
+    for (rs in snps.to.look$ref_variant_id_prot){
+      
+      snp.to.capture <- snps.to.look %>% filter(ref_variant_id_prot == rs)
+      
+      cr <- snp.to.capture$chr
+      file.to.capture <- list.files(path = folder, pattern = paste0("chrom_", as.character(cr), "_"))
+      df.chrom <- read.csv(file = paste0(folder, "/", file.to.capture[1]),
+                           header = T, 
+                           sep = "\t") # Opening the file for the corresponding chromosome and prot
+      
+      pos <- snp.to.capture$chromEnd
+      res <- df.chrom %>% filter(position == pos)
+      
+      alleles.to.capture <- c(toupper(snp.to.capture$allele1), 
+                              toupper(snp.to.capture$allele2))
+      alleles.to.capture <- alleles.to.capture[order(alleles.to.capture)]
+      
+      if (nrow(res) == 1){ # if nrow == 1, then we just check if the alleles are the same, if yes we add the result to the df.analyse, otherwise we add nothing
+        alleles.res <- c(toupper(res$Allele1),
+                         toupper(res$Allele2))
+        alleles.res <- alleles.res[order(alleles.res)]
+        
+        if (nchar(alleles.res[2]) > 1){
+          substr(alleles.res[1], 1, 1) <- "-"
+          alleles.res[2] <- substring(alleles.res[2], 2)
+        }
+        
+        
+        if (lequal(alleles.to.capture, alleles.res)){
+          df.analyse[rs, c("Allele1", "Allele2", "QTLtype", "Effect",
+                           "logP", "prot", "Allelesres1", "Allelesres2")] <- c(snp.to.capture$allele1, snp.to.capture$allele2, 
+                                                                               snp.to.capture$cistrans,res$Effect, res$log.P.,
+                                                                               prt, alleles.res)
+        }
+        else{
+          print(c(snp.to.capture$SNP.id, snp.to.capture$Variant_ID_prot))
+          print(c("Alleles db", alleles.to.capture))
+          print(c("Alleles res", alleles.res))
+          df.analyse[rs, c("Allele1", "Allele2", "QTLtype", "Effect",
+                           "logP", "prot", "Allelesres1", "Allelesres2")] <- c(snp.to.capture$allele1, snp.to.capture$allele2, 
+                                                                               snp.to.capture$cistrans,res$Effect, res$log.P.,
+                                                                               prt, alleles.res)
+        }
+      }
+      else if (nrow(res > 1)){ # if the nrow > 1, we need to find the which allele correspond to the snp
+        print(nrow(res))
+        line.allele <- 1
+        alleles.res <- c(toupper(res$Allele1[1]),
+                         toupper(res$Allele2[1]))
+        alleles.res <- alleles.res[order(alleles.res)]
+        while( ( !lequal(alleles.res, alleles.to.capture) ) && ( line.allele < ( nrow(res) ) ) ){
+          line.allele <- line.allele + 1
+          alleles.res <- c(toupper(res$Allele1[line.allele]),
+                           toupper(res$Allele2[line.allele]))
+          alleles.res <- alleles.res[order(alleles.res)]
+        }
+        if (lequal(alleles.res, alleles.to.capture)){
+          df.analyse[rs, c("Allele1", "Allele2", "QTLtype", "Effect",
+                           "logP", "prot", "Allelesres1", "Allelesres2")] <- c(snp.to.capture$allele1, snp.to.capture$allele2, 
+                                                                               snp.to.capture$cistrans,res$Effect, res$log.P.,
+                                                                               prt, alleles.res)
+        }
+      }
+    }
+    
+  }
+  
+}
+
+df.analyse.plot.complete <- df.analyse %>% filter(!is.na(logP)) %>% 
+                                  mutate(log.P = abs(as.numeric(logP))) %>% 
+                                  group_by(SNP.ref) %>% 
+                                  arrange(desc(log.P)) %>% 
+                                  subset(!duplicated(SNP.id)) %>% 
+                                  arrange(log.P, .by_group = F) %>% 
+                                  mutate(SNP_prot = paste0(SNP.id, "_", prot))
+
+df.analyse.plot.complete$SNP_prot <- factor(df.analyse.plot.complete$SNP_prot, levels = unique(df.analyse.plot.complete$SNP_prot))
+df.analyse.plot.complete$SNP.ref <- factor(df.analyse.plot.complete$SNP.ref, levels = rev(unique(df.analyse.plot.complete$SNP.ref)))
+
+df.analyse.plot.complete %>% ggplot(aes(x = SNP_prot, y = log.P, fill = SNP.ref)) +
+                    geom_bar(stat="identity") + # Hist
+                    scale_fill_manual(values = c("rs6815814" = "#F0A0FF", "rs72636686" = "#0075DC",
+                                       "rs1518110" = "#4C005C", "rs3775291" = "#FF5005", 
+                                       "rs1801274" = "#2BCE48", "rs4833095" = "#FFCC99", "rs2564594" = "#990000", 
+                                       "rs10034903" = "#9DCC00", 
+                                       "rs11936050" = "#C20088", "rs3764613" = "#003380", "rs10013453" = "#FFA405", 
+                                       "rs10779330" = "#FFA8BB", "rs10822168" = "#426600", "rs62449491" = "#FF0010",
+                                       "rs2393969" = "#5EF1F2", "rs35345753" = "#FFE100",
+                                       "rs352045" = "#740AFF")
+                            )+
+                    geom_hline(yintercept = -log10(0.05), linetype = "dashed", col = "black") +
+                    geom_hline(yintercept = -log10(0.01), linetype = "dotted", col = "black") +
+                    scale_y_continuous(expand = c(0,0)) +
+                    # ggpubr::theme_pubr() + 
+                    theme_classic()+
+                    theme(axis.text.x = element_text(size = 12), 
+                          axis.text.y = element_text(size = 2),
+                          axis.title.x = element_text(size = 16),
+                          axis.title.y = element_text(size = 16),
+                          axis.ticks.y = element_line(size = 0.2)) +
+                    ylab("-log10(p)") +
+                    xlab("SNP") + 
+                    labs(fill = "SNP of reference for LD") +
+                    coord_flip()
+ggsave("./plots/SNPeffects/LD02effect_complete_1.pdf", 
+       device = "pdf", 
+       width = 7,
+       height = 10)
+```
+
+```{r}
+print(0)
+```
+
+
+
