@@ -1,0 +1,114 @@
+---
+title: "Milieu Intérieur Project: Cytokine Data Analysis"
+date: "2023-06-10"
+author: "Violaine Saint-André"
+
+## License
+#  Milieu Intérieur Project: Cytokine Data Analysis
+#     Copyright (C) 2023  Violaine Saint-André
+#     contact: violaine.saint-andre@pasteur.fr
+# 
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+##
+---
+
+## Set parameters and import libraries
+```{r, results="hide"}
+
+library(dplyr)
+library(tidyr)
+library(gplots)
+library(RColorBrewer)
+library(cowplot)
+
+pathRes <- "./RESULTS"
+
+```
+
+## Import proteomic matrix
+
+```{r, results="hide"}
+df.data <- read.table(file="./TableS1.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+
+# remove the donors that have been reprocessed
+  # adding 302 as it is missing values for LPS 
+  # removed 883 who removed consent for everything
+df.data.v1 <- df.data %>% 
+  filter(!(DonorId %in% c(96, 104,	122,	167,	178,	219,	268,	279,	303,	308,	534,	701, 302, 883))) 
+
+dta <- df.data.v1[,c(1,2:ncol(df.data.v1))]
+
+#Log transformation
+dta.log <- dta
+dta.log[,4:ncol(dta)] <- log(dta[,4:ncol(dta)])
+dataProt <- dta.log
+
+head(dataProt)
+```
+
+## Create heatmaps
+
+```{r, results="hide"}
+
+hclusfun <- function(x) hclust(x, method = 'ward.D')
+distfun <- function(x) dist(x)
+myPalette <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
+
+prot <-dataProt
+
+prot[is.na(prot)] <- 0
+prot[,4:ncol(prot)] <- apply(prot[,4:ncol(prot)],2,function(x) as.numeric(x))
+
+prot$StimulusName <- gsub( "Candida","C.albicans", prot$StimulusName) 
+prot$StimulusName <- gsub( "CD3_CD28","CD3+CD28", prot$StimulusName) 
+prot$StimulusName <- gsub( "Poly_IC","PolyIC", prot$StimulusName) 
+prot$StimulusName <- gsub( "E_Coli","E.coli", prot$StimulusName)
+
+colnames(prot) <- c("DonorId", "BatchId",  "Stimulus", "CXCL5", "CSF2", "IFNg", "IL1b", "IL2", "IL6", 
+                        "IL8", "IL10", "IL12p70", "IL13", "IL17", "IL23", "TNFa")
+
+
+for (stim in c("Null", "BCG",  "C.albicans", "IL1b", "SEB", "E.coli", "Influenza", 'IFNg', "CD3+CD28",   "LPS",   "PolyIC", "TNFa")){
+print(paste0('stim=',stim))
+  
+pdf(paste0(pathRes,'/Prot_indiv_',stim, '_',  Sys.Date(), '.pdf'))
+#prot_indiv <- scale(as.matrix(prot[prot$Stimulus=="Null",4:ncol(prot)]),center=TRUE,scale=TRUE)
+prot_indiv <- as.matrix(prot[prot$Stimulus==stim,4:ncol(prot)])
+plotStim <- heatmap.2(x =prot_indiv, scale="none",
+          trace="none", key=TRUE, col=myPalette,  hclustfun = hclusfun, 
+          distfun = distfun, cexRow=0.1, cexCol=1, margins = c(8, 8), Colv = T)
+
+
+dev.off()
+}
+
+Breaks <- seq(min(as.matrix(prot[prot$Stimulus=="SEB",4:ncol(prot)])), max(as.matrix(prot[prot$Stimulus=="SEB",4:ncol(prot)])), length = 100)
+
+pdf(paste0(pathRes,'/Prot_allstim_',  Sys.Date(), '.pdf'))
+
+for (stim in c("Null", "BCG",  "C.albicans", "IL1b", "SEB", "E.coli", "Influenza", 'IFNg', "CD3+CD28",   "LPS",   "PolyIC", "TNFa")){
+  print(paste0('stim=',stim))
+  
+  #prot_indiv <- scale(as.matrix(prot[prot$Stimulus=="Null",4:ncol(prot)]),center=TRUE,scale=TRUE)
+  prot_indiv <- as.matrix(prot[prot$Stimulus==stim,4:ncol(prot)])
+  plotStim <- heatmap.2(x =prot_indiv, scale="none",
+                        trace="none", key=TRUE, col=myPalette,  hclustfun = hclusfun, 
+                        distfun = distfun, cexRow=0.1, cexCol=1,  Colv = T, breaks = Breaks, main=stim ) #lhei = c(0,12) 
+  
+}
+dev.off()
+
+# open the pdf with adobe for best colors
+
+```

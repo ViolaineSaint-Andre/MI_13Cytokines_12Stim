@@ -1,0 +1,457 @@
+---
+title: "Milieu Intérieur Project: Cytokine Data Analysis"
+date: "2023-06-10"
+author: "Violaine Saint-André"
+
+## License
+#  Milieu Intérieur Project: Cytokine Data Analysis
+#     Copyright (C) 2023  Violaine Saint-André
+#     contact: violaine.saint-andre@pasteur.fr
+# 
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+##
+---
+
+## Set parameters and import libraries
+```{r, results="hide"}
+
+# import libraries
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+library(rmarkdown)
+library(reshape2)
+library(RColorBrewer) 
+library(scales)
+library(cowplot)
+library(ggplot2)
+
+# set path for results
+pathRes <- "./RESULTS"
+
+```
+
+## Import proteomic matrix
+
+```{r, results="hide"}
+df.data <- read.table(file="./TableS1.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+
+# remove the donors that have been reprocessed
+  # adding 302 as it is missing values for LPS 
+  # removed 883 who removed consent for everything
+df.data.v1 <- df.data %>% 
+  filter(!(DonorId %in% c(96, 104,	122,	167,	178,	219,	268,	279,	303,	308,	534,	701, 302, 883))) 
+
+dta <- df.data.v1[,c(1,2:ncol(df.data.v1))]
+
+#Log transformation
+dta.log <- dta
+dta.log[,4:ncol(dta)] <- log(dta[,4:ncol(dta)])
+dataProt <- dta.log
+
+head(dataProt)
+
+```
+
+## Import covariates
+```{r, results="hide"}
+
+# on all selected variables
+df_data_all <- read.table(file="./df_data_all_137.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE) 
+colnames(df_data_all)
+
+#df_data_all <- df_data_all %>% dplyr::select(-c("AGE.V0","AGE","SEX", "BATCHID"))
+
+# define categorical and numerical variables
+col_names_cat <- list()
+col_names_num <- list()
+
+#df_datavar <- read.table(file = "./Variable_trans_mod.csv",
+#                           sep = ";",
+#                           dec = ",",
+#                           header = TRUE,
+#                           fill = TRUE,
+#                           stringsAsFactors = FALSE)
+#df_datavarShort <- df_datavar[,c("VARIABLE","VAR.DESC", "VAR.VAL","Value", "CATEGORY")]
+
+#df_datavarShort <- df_datavarShort[df_datavarShort$VARIABLE %in% names(df_data_all),]
+#dim(df_datavarShort) 
+#write.table(as.data.frame(df_datavarShort),paste("./df_datavarShort.txt"),  quote=F, row.names = F, sep="\t")
+
+df_datavar <- read.table(file = "./df_datavarShort.txt",
+                           sep = "\t",
+                           dec = ",",
+                           header = TRUE,
+                           fill = TRUE,
+                           stringsAsFactors = FALSE)
+
+df_datavar_cat <- df_datavar %>% filter(CATEGORY %in% c("cat"))
+df_datavar_num <- df_datavar %>% filter(CATEGORY %in% c("num"))
+df_datavar_all <- df_datavar %>% filter(CATEGORY %in% c("cat", "num", "likert"))
+  
+curr_col_names_cat <- intersect(df_datavar_cat$VARIABLE, names(df_data_all))
+curr_col_names_num <- intersect(df_datavar_num$VARIABLE, names(df_data_all))
+curr_col_names_all <- intersect(df_datavar_all$VARIABLE, names(df_data_all))
+
+# transform numerical data into numeric  
+df_data_all[,curr_col_names_num] <- apply(df_data_all[,curr_col_names_num, drop=F],2, function(x) as.numeric(gsub(",", ".", as.character(x))))
+df_data_all[,curr_col_names_cat] <- apply(df_data_all[,curr_col_names_cat, drop=F],2, function(x) as.character(x))
+  
+col_names_cat <-c(col_names_cat, curr_col_names_cat)
+col_names_num <-c(col_names_num, curr_col_names_num)
+
+
+# > colnames(df_data_all)
+#   [1] "SUBJID"         "SEASON"         "CHEVEUX"        "CORREC"         "CORRECP"        "LOG"           
+#   [7] "PHYSL"          "PHYSP.T1"       "VILLENPOP20"    "VILLESPOP20"    "VIT"            "VIT.COUPLE"    
+#  [13] "VIT.ENFANTS"    "YEUX.T1"        "NVILLES"        "PHYSDUR.T1"     "PHYSJ"          "PHYST.T1"      
+#  [19] "VILLENPOP"      "VILLESPOP"      "BRUIT"          "CSP"            "EMPLOIP"        "EMPLOIS"       
+#  [25] "INACT"          "NIVETUD"        "POUSS"          "PTOX"           "REVENUS"        "TRAVJ"         
+#  [31] "TRAVT"          "AMIDI"          "DEJ"            "DINER"          "GRIGN"          "MATIN"         
+#  [37] "NCOLL"          "PDEJ"           "PRODALL1"       "PRODALL2"       "PRODALL3"       "PRODALL4"      
+#  [43] "REPASH"         "SEL"            "SOIREE"         "ALCF"           "BIERE"          "CUISIN"        
+#  [49] "DESS"           "DIFFATM"        "FASTF"          "FCRUS"          "FCUITS"         "FECUL"         
+#  [55] "FRITS"          "FROM"           "PLATC"          "RESTAU"         "VIANDE"         "VIENN"         
+#  [61] "VIN"            "VITA"           "VORALE"         "PSEXP"          "TABAC.T1"       "NBYLPSEXP"     
+#  [67] "NBYLTABAC"      "NBYPSEXP"       "NBYTABAC"       "TOTNROFCIGS"    "DORDIF"         "DORLUM"        
+#  [73] "HASCHICH"       "STRESS"         "CONCEN"         "DIFF"           "DORH.T1"        "FATI"          
+#  [79] "MBLESS"         "PLAIS"          "TRIS"           "ACCOUCH"        "ALIM"           "VOIE"          
+#  [85] "ACCOUNB"        "ALIMDUR"        "NAISSP"         "NAISST"         "TONSILLECTOMY"  "APPENDICECTOMY"
+#  [91] "OTHER"          "MEASLES"        "HEPATITISB"     "FLU"            "MEASLESMH"      "RUBELLAMH"     
+#  [97] "CHICKENPOXMH"   "MUMPSMH"        "OTHERMH"        "SURGICAL.INT"   "MUMPS"          "RUBELLA"       
+# [103] "CMSEQ"          "CMSTDT"         "ABDOCM.V0"      "BMI.V0"         "DIABP1.V0"      "DIABP2.V0"     
+# [109] "FC.V0"          "HEIGHT.V0"      "SYSBP1.V0"      "TEMP.V0"        "WEIGHT.V0"      "ALLER"         
+# [115] "ATTAQUE"        "CAUTRE"         "CCOLON"         "CSEIN"          "DIABETE"        "HYPERT"        
+# [121] "INFARC"         "CMV.V1"         "EBV.EA.V1"      "EBV.EBNA.V1"    "HBS.V1"         "HP.V1"         
+# [127] "HSV1.V1"        "HSV2.V1"        "ORE.V1"         "ROUG.V1"        "TXP.V1"         "VZV.V1"        
+# [133] "HP.V1.QT"                                             
+
+
+```
+
+## Make regressions and record data for effect size plots
+```{r, results="hide"}
+
+# prepare the lists
+mat_effect_size_E <- list()
+mat_effect_size_sd_low <- list()
+mat_effect_size_sd_high <- list()
+mat_p_val <- list()
+significatif <- list()
+heatmapList <- list()
+list_matDATAPvalFDR <- list()
+
+# loop on all stimulations 
+  
+for (stimul in c("SEB", "E.coli", "BCG", "C.albicans",  "CD3+CD28", "LPS", "PolyIC", "Null","Influenza","IL1b", 'IFNg',"TNFa" )){  
+  
+  print(paste0('stimul=',stimul))
+  diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+  
+  # to work on expressed prot only
+  dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+  dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+  diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+  
+  medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+  id <- medianVal > log(1.3)
+  protList <- colnames(dta_stim[4:16][,id])  
+  
+  curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+  curr_dta[,1:3] <- dta_stim[,1:3]
+  n <- length(protList)+3
+  curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+  curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+  dta_stimul <- curr_dta
+  
+  
+    # exceptions
+  
+  if (stimul == "TNFa") {
+    dta_stimul <- dta_stimul[, setdiff(colnames(dta_stimul), "TNFa")] 
+    protList <- setdiff(protList, "TNFa")
+  }
+  
+  if (stimul == "IL1b") {
+    dta_stimul <- dta_stimul[, setdiff(colnames(dta_stimul), "IL1b")] 
+    protList <- setdiff(protList, "IL1b")
+  }
+  
+  if (stimul == "IFNg") {
+    dta_stimul <- dta_stimul[, setdiff(colnames(dta_stimul), "FNg")] 
+    protList <- setdiff(protList, "IFNg")
+ }
+                      
+                    
+   if (stimul ==  "CD3+CD28") {
+    dta_CD3_CD28 <- dataProt[dataProt$StimulusName == "CD3+CD28",]
+    
+    # separate data in 2 groups
+    dta_CD3_CD28num <- as.data.frame(apply(dta_CD3_CD28[, 4:16], 2, as.numeric), na.rm = T)
+    # replace NAs by imputation
+    cl <- kmeans(Hmisc::impute(dta_CD3_CD28num), 2)
+    dta_CD3_CD28_grp1 <- dta_CD3_CD28[which(cl$cluster==1),]
+    dta_CD3_CD28_grp2 <- dta_CD3_CD28[which(cl$cluster==2),]
+    
+    # then use the right group 
+    if (dim(dta_CD3_CD28_grp1)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp1
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+    
+    else if (dim(dta_CD3_CD28_grp2)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp2
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+  
+    # use the right indices for the Null
+    diffMat<- dta_stim[,4:16]-dta_Null[dta_stim$DonorId,4:16]
+    medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+    id <- medianVal > log(1.3)
+    protList <- colnames(dta_stim[4:16][,id])
+
+    curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+    curr_dta[,1:3] <- dta_stim[,1:3]
+    n <- length(protList)+3
+    curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+    curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+    dta_stimul <- curr_dta
+
+  }
+  
+  if (stimul ==  "Null") {
+    dta_stimul <- dataProt[dataProt$StimulusName == "Null",]
+    protList <- colnames(dta_stimul[4:16])
+  }
+  
+  
+  # merge the dataframes
+  
+  if (stimul == "CD3+CD28"){
+    DF <- DF[match(ind_CD3_CD28, DF$DonorId),]
+    DF <- merge.data.frame(dta_stimul, df_data_all, by.x = "DonorId", by.y = "SUBJID")
+  } else {
+    DF <- merge.data.frame(dta_stimul, df_data_all, by.x = "DonorId", by.y = "SUBJID")
+  }
+  
+  # make regressions
+  
+  matList <- list()
+  matDATA <- list()
+  matDATAPval <- list()
+  p_val <- list()
+  listFit <- list()
+  effect_size_E_list <- list()
+  effect_size_sd_low_list <- list()
+  effect_size_sd_high_list <- list()
+  listFitPval <- list()
+  p_val_list <- list()
+ 
+  for (i in protList) {  
+    print (i)
+    listCrit <- list()
+    effect_size_E <- list()
+    effect_size_sd_low <- list()
+    effect_size_sd_high <- list()
+    listPval <- list()
+  
+  for (crit in colnames(df_data_all %>% dplyr::select (-'SUBJID'))){
+   
+      if (crit %in% col_names_cat) {
+        
+        DF2 <- na.omit(DF[,c(crit,i,'AGE.V0', 'SEX', 'BatchId')])
+        
+        # model 1 with crit
+        fitm <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ x * AGE.V0  +  SEX + BatchId), 
+                                                         list( y = i, x = crit))))[2], data=DF2)
+        indCrit <- grep(crit,head(names(coef(fitm)), -2)) # to remove interaction
+        levelsCrit <- names(coef(fitm))[indCrit]
+        
+        fitmA <- anova(fitm)
+        
+        # model 2 without crit
+        fitm2 <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ AGE.V0 + SEX + BatchId ),
+                                                          list(y= i))))[2], data=DF2)
+        fitmA2 <- anova(fitm2)
+        
+        fit <- anova(fitm, fitm2, test = 'Chisq')
+        
+        listPval[crit] <- fit[2,'Pr(>Chi)']
+        
+        # recover pval and ES
+        
+        # remove interraction terms
+        sumFit <- summary(fitm)$coefficients[grep(":AGE.V0",
+                                                              rownames(summary(fitm)$coefficients),
+                                                              invert=T
+                                                              ), ]
+        
+        listCrit[crit] <- min(summary(fitm)$coefficients[grep(crit,
+                                                              rownames(sumFit)
+                                                              ), 'Pr(>|t|)']
+                                                         )
+                                                         
+      
+        
+        effect_size_E[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit],
+                                           .Names=levelsCrit)
+        
+        p_val[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Pr(>|t|)'][indCrit],
+                                   .Names=levelsCrit)
+        
+        effect_size_sd_low[[crit]] <- structure(.Data=confint(fitm, parm=levelsCrit , level=0.95)[,1], .Names=levelsCrit)
+        effect_size_sd_high[[crit]] <- structure(.Data=confint(fitm, parm=levelsCrit , level=0.95)[,2], .Names=levelsCrit)
+        
+      }
+      
+      else if (crit %in% col_names_num) {
+        
+        DF2 <- na.omit(DF[,c(crit,i,'AGE.V0', 'SEX', 'BatchId')])
+        
+        # Model 1 with crit
+        fitm <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ x * AGE.V0  + SEX + BatchId), 
+                                                         list(  y = i, x = crit))))[2], data=DF2)
+        indCrit <- grep(crit,head(names(coef(fitm)), -1)) # to remove interaction
+        levelsCrit <- names(coef(fitm))[indCrit]
+        
+        
+        # Model 2 without crit
+        fitm2 <- lm(gsub('\\"',"",as.character(substitute(expression(y ~  AGE.V0 + SEX + BatchId),
+                                                          list( y = i))))[2], data=DF2)
+        
+        fit <- anova(fitm, fitm2, test = 'Chisq')
+        
+        listPval[crit] <- fit[2,'Pr(>Chi)']
+        
+        # recover pval and ES
+        
+        # remove interraction terms
+        sumFit <- summary(fitm)$coefficients[grep(":AGE.V0",
+                                                              rownames(summary(fitm)$coefficients),
+                                                              invert=T
+                                                              ), ]
+        
+        listCrit[crit] <- min(summary(fitm)$coefficients[grep(crit,
+                                                              rownames(sumFit)
+                                                              ), 'Pr(>|t|)']
+                                                         )
+        
+        effect_size_E[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit],
+                                           .Names=levelsCrit)
+        
+        p_val[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Pr(>|t|)'][indCrit],
+                                   .Names=levelsCrit)
+        
+        effect_size_sd_low[[crit]] <- structure(.Data=confint(fitm, parm=levelsCrit , level=0.95)[,1], .Names=levelsCrit)
+        effect_size_sd_high[[crit]] <- structure(.Data=confint(fitm, parm=levelsCrit , level=0.95)[,2], .Names=levelsCrit)
+        
+      }
+      
+    }
+    
+    listFit[[i]] <- unlist(listCrit)
+    
+    listFitPval[[i]] <- unlist(listPval)
+    
+    effect_size_E_list[[i]] <- unlist(effect_size_E)
+    effect_size_sd_low_list[[i]] <- unlist(effect_size_sd_low)
+    effect_size_sd_high_list[[i]] <- unlist(effect_size_sd_high)
+    p_val_list[[i]] <- unlist(p_val)
+  }
+  
+  
+  #Recreate matrices
+  
+  mat_effect_size_E[[stimul]] <- as.data.frame(effect_size_E_list)
+  mat_effect_size_sd_low[[stimul]] <- as.data.frame(effect_size_sd_low_list)
+  mat_effect_size_sd_high[[stimul]] <- as.data.frame(effect_size_sd_high_list)
+  mat_p_val[[stimul]] <- as.data.frame(p_val_list)
+  
+  #FDR for all
+   matDATAPval <- as.data.frame(listFitPval)
+   matDATAPvalFDR <-matrix(nrow=nrow(matDATAPval), ncol=ncol(matDATAPval), data=p.adjust(unlist(matDATAPval), method='BY'))
+   colnames(matDATAPvalFDR) <- colnames(matDATAPval)
+   rownames(matDATAPvalFDR) <- rownames(matDATAPval)
+  
+   matDATAselect <- apply(matDATAPvalFDR,1, function (x) (x< 0.01))
+   matDATAselect <- matDATAselect[,colSums(matDATAselect) >= 1]
+   matDATAselect <- t(matDATAselect)
+   
+   rownames(matDATAselect) <- gsub( "BIERE","Beer", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "TABAC.T1","Smoking status", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "CMV.V1","CMV status", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "BMI.V0","BMI", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "ABDOCM.V0","Abdo.circ.", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "TOTNROFCIGS","Tot.numb.cig.", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "NBYTABAC","Nb.years smoking", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "NBYLTABAC","Nb.years last smoke", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "PLATC","Cooked meals", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "FC.V0","Heart rate", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "SYSBP1.V0","Systolic measure", rownames(matDATAselect))
+   rownames(matDATAselect) <- gsub( "WEIGHT.V0","Weight", rownames(matDATAselect))
+
+   colM <- colnames(matDATAselect)
+   rowM <- rownames(matDATAselect)
+  
+   rownames(matDATAPvalFDR) <- gsub( "BIERE","Beer", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "TABAC.T1","Smoking status", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "CMV.V1","CMV status", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "BMI.V0","BMI", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "ABDOCM.V0","Abdo.circ.", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "TOTNROFCIGS","Tot.numb.cig.", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "NBYTABAC","Nb.years smoking", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "NBYLTABAC","Nb.years last smoke", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "PLATC","Cooked meals", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "FC.V0","Heart rate", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "SYSBP1.V0","Systolic measure", rownames(matDATAPvalFDR))
+   rownames(matDATAPvalFDR) <- gsub( "WEIGHT.V0","Weight", rownames(matDATAPvalFDR))
+
+
+   
+   significatif[[stimul]]  <- rowM
+  
+  melted_matDATA <- melt(as.matrix(matDATAPvalFDR))
+  melted_matDATA$value <- -log10(melted_matDATA$value)
+  melted_matDATA$stars <- cut(melted_matDATA$value, breaks=c(-Inf, 1.30103, 2, 3, Inf), label=c("", "*", "**", "***"))
+  medianValue <- median(melted_matDATA$value, na.rm=T)
+  
+  
+  #Plot heatmaps for significant only
+  heatmapList[[stimul]] <- ggplot(melted_matDATA[melted_matDATA$Var1 %in% significatif[[stimul]], ], aes(x=Var2, y=Var1, fill=value)) +
+    geom_tile()+
+     scale_fill_gradient2(low="dark blue", mid="light blue", high="red", midpoint=medianValue) +
+     #scale_fill_gradient2(low="dark blue", mid="light blue", high="red", limits=c(0,30)) +
+    geom_text(aes(label=stars), color="black", size=3) +
+    labs(y="", x="", fill="") +
+    theme(legend.key.size = unit(1, "cm")) +
+    theme_bw() +
+    guides(fill = guide_colourbar(barwidth = 0.5,
+                                barheight = 3))+
+    theme(axis.text.x=element_text(angle = -90, hjust = 0), axis.text = element_text(size = 8))+
+    theme(axis.text = element_text(size = 8)) +
+    ggtitle(stimul)
+  # for A4 format
+  ggsave(plot=marrangeGrob(grobs=heatmapList, nrow=4, ncol=2),width = 8.27, height = 11.7, filename = paste0(pathRes,'/Heatmaps1cWithAgeInterractions_', Sys.Date(), '.pdf')) 
+  
+  write.table(as.data.frame(melted_matDATA),file=paste0(pathRes,"/Heatmaps1cWithAgeInterractions_values_", stimul,"_", Sys.Date(),".txt"), quote=F, row.names = F, col.names = T, sep="\t")
+
+}
+
+# save session info and environment
+#packagesVersions <- sessionInfo()
+#save.image(file=paste0('./eCRFVsCytokines_', Sys.Date(), '.RData'))
+
+```  
+
+

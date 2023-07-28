@@ -1,0 +1,477 @@
+---
+title: "Milieu Intérieur Project: Cytokine Data Analysis"
+date: "2023-06-10"
+author: "Violaine Saint-André"
+
+## License
+#  Milieu Intérieur Project: Cytokine Data Analysis
+#     Copyright (C) 2023  Violaine Saint-André
+#     contact: violaine.saint-andre@pasteur.fr
+# 
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+##
+---
+
+## Set parameters and import libraries
+```{r, results="hide"}
+
+# import libraries
+#library(sjstats)
+#library(stringr)
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+library(rmarkdown)
+library(reshape2)
+library(RColorBrewer) 
+library(scales)
+library(cowplot)
+library(ggplot2)
+
+# set path for results
+pathRes <- "./RESULTS"
+
+```
+## Import covariates
+```{r, results="hide"}
+# on all selected variables
+df_data_all <- read.table(file="./df_data_all_137.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE) 
+colnames(df_data_all)
+
+length(df_data_all) #137
+df_data_all133names <- colnames(df_data_all)
+
+# set categorical and numerical variables
+col_names_cat <- list()
+col_names_num <- list()
+
+#df_datavar <- read.table(file = "./Variable_trans_mod.csv",
+#                           sep = ";",
+#                           dec = ",",
+#                           header = TRUE,
+#                           fill = TRUE,
+#                           stringsAsFactors = FALSE)
+#df_datavarShort <- df_datavar[,c("VARIABLE","VAR.DESC", "VAR.VAL","Value", "CATEGORY")]
+
+#df_datavarShort <- df_datavarShort[df_datavarShort$VARIABLE %in% names(df_data_all),]
+#dim(df_datavarShort) 
+#write.table(as.data.frame(df_datavarShort),paste("./df_datavarShort.txt"),  quote=F, row.names = F, sep="\t")
+
+df_datavar <- read.table(file = "./df_datavarShort.txt",
+                           sep = "\t",
+                           dec = ",",
+                           header = TRUE,
+                           fill = TRUE,
+                           stringsAsFactors = FALSE)
+
+df_datavar_cat <- df_datavar %>% filter(CATEGORY %in% c("cat"))
+df_datavar_num <- df_datavar %>% filter(CATEGORY %in% c("num"))
+df_datavar_all <- df_datavar %>% filter(CATEGORY %in% c("cat", "num", "likert"))
+  
+curr_col_names_cat <- intersect(df_datavar_cat$VARIABLE, names(df_data_all))
+curr_col_names_num <- intersect(df_datavar_num$VARIABLE, names(df_data_all))
+curr_col_names_all <- intersect(df_datavar_all$VARIABLE, names(df_data_all))
+
+# transform numerical data into numeric  
+df_data_all[,curr_col_names_num] <- apply(df_data_all[,curr_col_names_num, drop=F],2, function(x) as.numeric(gsub(",", ".", as.character(x))))
+df_data_all[,curr_col_names_cat] <- apply(df_data_all[,curr_col_names_cat, drop=F],2, function(x) as.character(x))
+  
+col_names_cat <-c(col_names_cat, curr_col_names_cat)
+col_names_num <-c(col_names_num, curr_col_names_num)
+
+# selection of variables
+df_data_allsel <- df_data_all[,c('SUBJID', 'AGE.V0', 'SEX', 'TABAC.T1','NBYLTABAC', 'NBYTABAC', 'TOTNROFCIGS', 'WEIGHT.V0', 'ABDOCM.V0', 'BMI.V0', 'FC.V0','CMV.V1', 'BIERE','PLATC')]
+
+
+```
+
+## Upload methylation data
+```{r, results="hide"}
+
+direct <- readRDS("./MIMETH_mvalues_direct_smoke.rds")
+cglist <- as.data.frame(direct)
+#> dim(cglist)
+#[1]  958 2417
+
+  
+```
+## Import proteomic matrix
+
+```{r, results="hide"}
+df.data <- read.table(file="./TableS1.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+
+# remove the donors that have been reprocessed
+df.data.v1 <- df.data %>% 
+  # adding 302 as it is missing values for LPS 
+  # removed 883 who removed consent for everything
+  filter(!(DonorId %in% c(96, 104,	122,	167,	178,	219,	268,	279,	303,	308,	534,	701, 302, 883))) 
+
+dta <- df.data.v1[,c(1,2:ncol(df.data.v1))]
+
+# log transformation
+dta.log <- dta
+dta.log[,4:ncol(dta)] <- log(dta[,4:ncol(dta)])
+dataProt <- dta.log
+
+head(dataProt)
+
+```
+
+## Run regressions
+```{r, results="hide"}
+# prepare the lists
+mat_effect_size_E <- list()
+mat_effect_size_sd_low <- list()
+mat_effect_size_sd_high <- list()
+mat_p_val <- list()
+significatif <- list()
+heatmapList <- list()
+list_matDATAPvalFDR <- list()
+
+# loop on all stimulations 
+stimul= "SEB"
+  
+#for (stimul in c("SEB", "E.coli", "BCG", "C.albicans",  "CD3+CD28", "LPS", "PolyIC", "Null","Influenza","IL1b", 'IFNg',"TNFa" )){  
+  print(paste0('stimul=',stimul))
+  diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+  
+  # to work on expressed prot only
+  dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+  dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+  diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+  
+  medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+  id <- medianVal > log(1.3)
+  protList <- colnames(dta_stim[4:16][,id])  
+  
+  curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+  curr_dta[,1:3] <- dta_stim[,1:3]
+  n <- length(protList)+3
+  curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+  curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+  dta_stimul <- curr_dta
+  dta_stimul <- merge.data.frame(dta_stimul, cglist, by.x = "DonorId", by.y = "SUBJID")
+  
+  
+  # exceptions
+  if (stimul == "TNFa") {dta_stimul <- dta_stimul[, setdiff(colnames(dta_stimul), "IL1b")] 
+  protList <- setdiff(protList, "IL1b")}
+                      
+   if (stimul ==  "CD3+CD28") {
+    dta_CD3_CD28 <- dataProt[dataProt$StimulusName == "CD3+CD28",]
+    
+    # separate data in 2 groups
+    dta_CD3_CD28num <- as.data.frame(apply(dta_CD3_CD28[, 4:16], 2, as.numeric), na.rm = T)
+    # replace NAs by imputation
+    cl <- kmeans(Hmisc::impute(dta_CD3_CD28num), 2)
+    dta_CD3_CD28_grp1 <- dta_CD3_CD28[which(cl$cluster==1),]
+    dta_CD3_CD28_grp2 <- dta_CD3_CD28[which(cl$cluster==2),]
+    
+    # then use the right group 
+    if (dim(dta_CD3_CD28_grp1)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp1
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+    
+    else if (dim(dta_CD3_CD28_grp2)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp2
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+  
+    # use the right indices for the Null
+    diffMat<- dta_stim[,4:16]-dta_Null[dta_stim$DonorId,4:16]
+    medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+    id <- medianVal > log(1.3)
+    protList <- colnames(dta_stim[4:16][,id])
+
+    curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+    curr_dta[,1:3] <- dta_stim[,1:3]
+    n <- length(protList)+3
+    curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+    curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+    dta_stimul <- curr_dta
+    dta_stimul <- merge.data.frame(dta_stimul, cglist, by.x = "DonorId", by.y = "SUBJID")
+
+  }
+  
+  if (stimul ==  "Null") {
+    dta_stimul <- dataProt[dataProt$StimulusName == "Null",]
+    dta_stimul <- merge.data.frame(dta_stimul, cglist, by.x = "DonorId", by.y = "SUBJID")
+    protList <- colnames(dta_stimul[4:16])
+  }
+  
+  
+  # merge the dataframes
+  
+  if (stimul == "CD3+CD28"){
+    DF <- DF[match(ind_CD3_CD28, DF$DonorId),]
+    DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+  } else {
+    DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+  }
+  
+  
+  listFit <- list()
+  effect_size_E_list <- list()
+  effect_size_sd_low_list <- list()
+  effect_size_sd_high_list <- list()
+  listFitPval <- list()
+  p_val_list <- list()
+ 
+  #stimul = "Null"
+  #for (i in c("Il2", "Il13")) {  #protList
+    i="IL2"
+    print (i)
+    listCrit <- list()
+    effect_size_E <- list()
+    effect_size_sd_low <- list()
+    effect_size_sd_high <- list()
+    listPval <- list()
+  
+
+for (crit in setdiff(colnames(cglist), "SUBJID")){
+          print(crit)
+  
+          DF2 <- na.omit(DF[,c(crit,i, 'AGE.V0', 'SEX', 'BatchId')])
+          
+          fitm <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ x + AGE.V0 + SEX + BatchId), 
+                                                           list(x = crit, y = i))))[2], data=DF2)
+          
+          ####
+          
+          fitm2 <- lm(gsub('\\"',"",as.character(substitute(expression(y ~  AGE.V0 + SEX + BatchId),
+                                                            list( y = i))))[2], data=DF2)
+
+          fit <- anova(fitm, fitm2, test = 'Chisq')
+          
+          #listPval[crit] <- fit[2,'Pr(>Chi)']
+          listPval[crit] <- fit[2,5]
+          ####
+          
+    
+    }
+  
+  #  listFit[[i]] <- unlist(listCrit)
+    
+    listFitPval[[i]] <- unlist(listPval)
+    
+ 
+  ########## FDR for all
+  matDATAPval <- as.data.frame(listFitPval)
+  matDATAPvalFDR <-matrix(nrow=nrow(matDATAPval), ncol=ncol(matDATAPval), data=p.adjust(unlist(matDATAPval), method='BY'))
+  colnames(matDATAPvalFDR) <- colnames(matDATAPval)
+  rownames(matDATAPvalFDR) <- rownames(matDATAPval)
+  # 
+   matDATAselect <- apply(matDATAPvalFDR,1, function (x) (x< 0.001))
+   #matDATAselect <- matDATAselect[,colSums(matDATAselect) >= 1]
+   #colM <- colnames(matDATAselect)
+   
+   colM  <-names(which(matDATAselect,TRUE))
+  # matDATAselect2 <- t(matDATAselect)
+  # matDATAselect2 <- matDATAselect2[,colSums(matDATAselect2) >= 1]
+  # rowM <- colnames(matDATAselect2)
+  # 
+  significatif[[stimul]]  <- colM
+  # significatifProt[[stimul]]  <- rowM
+
+  #matDATAselectnum <- matrix(ncol=length(colM), nrow = length(rowM), as.numeric(unlist(matDATAselect)))
+  #rownames(matDATAselectnum) <- rowM
+  #matList[[stimul]] <- t(matDATAselectnum)
+  #rownames(matList[[stimul]]) <- colM
+
+  #signiProt <- lapply(matList, function(mm) apply(mm,2,function(x) names(which(x==1))))
+
+  melted_matDATA <- melt(as.matrix(matDATAPvalFDR))
+  #melted_matDATA <- melt(as.matrix(matDATAPval))
+
+
+  
+  
+  melted_matDATA$value <- -log10(melted_matDATA$value)
+  melted_matDATA$stars <- cut(melted_matDATA$value, breaks=c(-Inf, 1.30103, 2, 3, Inf), label=c("", "*", "**", "***"))
+  medianValue <- median(melted_matDATA$value, na.rm=T)
+  
+  
+  
+   #  #significant only
+   heatmapList[[stimul]] <- ggplot(melted_matDATA[melted_matDATA$Var1 %in% significatif[[stimul]], ], aes(x=Var2, y=Var1, fill=value)) +
+     geom_tile()+
+     scale_fill_gradient2(low="dark blue", mid="light blue", high="red", midpoint=medianValue) + #midpoint=-log10(0.05)
+     geom_text(aes(label=stars), color="black", size=5) +
+     labs(y="", x="", fill="-log10(adjPval)") +
+     theme_bw() + theme(axis.text.x=element_text(angle = -90, hjust = 0))+
+     theme(axis.text = element_text(size = 6)) +
+     ggtitle(paste0('Stimulus = ', stimul))
+
+  ggsave(plot=marrangeGrob(grobs=heatmapList, nrow=1, ncol=1), filename = paste0(pathRes, '/Heatmap_SmokingvsMethylation_', stimul, Sys.Date(), '.pdf'), width= 8.5, height=11)
+  
+   write.table(as.data.frame(melted_matDATA),file=paste0(pathRes,"/HeatmapsSmokingvsMethylation_values_", stimul,"_", Sys.Date(),".txt"), quote=F, row.names = F, col.names = T, sep="\t")
+  
+#}
+
+heatmapList$SEB$data
+heatmapList$SEB$data[order(heatmapList$SEB$data$value, decreasing = T),]
+#heatmapList$`CD3+CD28`$data[order(heatmapList$`CD3+CD28`$data$value, decreasing = T),]
+probesIL2_SEB <- heatmapList$SEB$data$Var1
+#probesIL2_CD3CD28 <- heatmapList$`CD3+CD28`$data$Var1
+#length(probesIL2_SEB)
+#[1] 129
+
+# Var1 Var2     value stars
+# 18   cg03451670  Il2  3.621753   ***
+#   41   cg05575921  Il2 10.189929   ***
+#   68   cg25013095  Il2  5.834322   ***
+#   69   cg07576135  Il2  3.330225   ***
+#   93   cg23079012  Il2  5.135640   ***
+#   104  cg12180703  Il2  4.226407   ***
+#   146  cg09848445  Il2  3.653636   ***
+#   166  cg24711224  Il2  3.004937   ***
+#   174  cg09099830  Il2  5.219887   ***
+#   198  cg14435720  Il2  4.709942   ***
+#   278  cg12492197  Il2  3.038783   ***
+#   279  cg19719391  Il2  7.232536   ***
+#   297  cg14162418  Il2  4.557132   ***
+#   351  cg27204197  Il2  3.111277   ***
+#   360  cg20184330  Il2  3.496077   ***
+#   392  cg19859270  Il2  8.665338   ***
+#   422  cg27521648  Il2  4.187399   ***
+#   426  cg01330596  Il2  3.473860   ***
+#   431  cg12147622  Il2  3.038783   ***
+#   476  cg22870429  Il2  4.736719   ***
+#   505  cg12144393  Il2  4.209434   ***
+#   543  cg25730428  Il2  3.386089   ***
+#   615  cg17096126  Il2  3.090091   ***
+#   620  cg12956751  Il2  6.746754   ***
+#   636  cg16519923  Il2  5.511174   ***
+#   661  cg14180330  Il2  5.604505   ***
+#   709  cg12954441  Il2  3.497026   ***
+#   719  cg20328799  Il2  3.512723   ***
+#   725  cg19758958  Il2  6.280134   ***
+#   730  cg14051805  Il2  3.225921   ***
+#   754  cg02372435  Il2  3.046107   ***
+#   755  cg26768182  Il2  3.874338   ***
+#   759  cg08866634  Il2  3.380690   ***
+#   770  cg23320029  Il2  3.004937   ***
+#   813  cg17631924  Il2  3.631585   ***
+#   817  cg26878655  Il2  3.653636   ***
+#   822  cg19572487  Il2  5.904931   ***
+#   842  cg00501876  Il2  3.284291   ***
+#   849  cg08542560  Il2  3.133375   ***
+#   881  cg16142959  Il2  4.174017   ***
+#   882  cg08799257  Il2  4.056281   ***
+#   915  cg15051432  Il2  3.157169   ***
+#   920  cg20244340  Il2  3.187475   ***
+#   934  cg17896824  Il2  3.956891   ***
+#   937  cg14720274  Il2  4.279210   ***
+#   945  cg08369014  Il2  5.148392   ***
+#   967  cg14919440  Il2  3.397723   ***
+#   977  cg16046891  Il2  3.070446   ***
+#   982  cg23462985  Il2 12.098195   ***
+#   1014 cg24086068  Il2  4.742645   ***
+#   1056 cg19589396  Il2  6.280134   ***
+#   1059 cg24617344  Il2  6.931371   ***
+#   1082 cg21528163  Il2  3.023761   ***
+#   1102 cg23435661  Il2  4.833670   ***
+#   1122 cg24032265  Il2  5.251098   ***
+#   1125 cg20698113  Il2  6.931371   ***
+#   1130 cg10413580  Il2  3.891062   ***
+#   1133 cg09469355  Il2  3.302991   ***
+#   1226 cg01097768  Il2  4.927685   ***
+#   1233 cg04551776  Il2  4.279210   ***
+#   1241 cg18158149  Il2  4.338909   ***
+#   1242 cg16401108  Il2  5.680809   ***
+#   1275 cg15241876  Il2  3.528509   ***
+#   1325 cg06895196  Il2  3.811453   ***
+#   1330 cg00475490  Il2  7.540626   ***
+#   1359 cg18871648  Il2  3.630047   ***
+#   1366 cg24306398  Il2  4.004177   ***
+#   1387 cg14018141  Il2  3.476859   ***
+#   1403 cg15653143  Il2  5.417043   ***
+#   1434 cg17290454  Il2  3.384164   ***
+#   1448 cg25648203  Il2  5.110422   ***
+#   1495 cg17684034  Il2  3.157326   ***
+#   1498 cg00045592  Il2  3.621753   ***
+#   1506 cg12722429  Il2  3.689844   ***
+#   1512 cg09010260  Il2  3.056623   ***
+#   1550 cg02657160  Il2  3.121519   ***
+#   1556 cg14089503  Il2  6.118594   ***
+#   1571 cg14595618  Il2  5.417043   ***
+#   1600 cg13801569  Il2  4.990518   ***
+#   1641 cg09403758  Il2  7.236597   ***
+#   1646 cg23586595  Il2  3.720986   ***
+#   1656 cg04039397  Il2  3.456140   ***
+#   1673 cg01940273  Il2  9.063097   ***
+#   1691 cg25006149  Il2  7.817521   ***
+#   1700 cg16452231  Il2  5.511174   ***
+#   1705 cg05086879  Il2  6.131030   ***
+#   1708 cg01579391  Il2  3.152010   ***
+#   1735 cg25530474  Il2  4.398797   ***
+#   1754 cg27537125  Il2  4.654427   ***
+#   1760 cg12761472  Il2  4.545719   ***
+#   1761 cg07775417  Il2  3.101906   ***
+#   1781 cg08893087  Il2  3.049176   ***
+#   1803 cg01899089  Il2  3.397723   ***
+#   1808 cg08170837  Il2  3.147421   ***
+#   1820 cg00977926  Il2  6.204807   ***
+#   1827 cg21188533  Il2  3.384164   ***
+#   1831 cg18268027  Il2  3.621753   ***
+#   1838 cg02978227  Il2  4.455940   ***
+#   1852 cg04885881  Il2  5.013266   ***
+#   1949 cg01731783  Il2  3.503788   ***
+#   1963 cg20301125  Il2  3.170174   ***
+#   1979 cg03636183  Il2  7.673219   ***
+#   1982 cg22829098  Il2  6.260260   ***
+#   1990 cg07069636  Il2  4.279210   ***
+#   1991 cg05934812  Il2  8.665338   ***
+#   2025 cg17250680  Il2  4.004923   ***
+#   2028 cg26165117  Il2  3.453660   ***
+#   2033 cg17739917  Il2  5.344016   ***
+#   2035 cg10919522  Il2  3.476859   ***
+#   2041 cg24540678  Il2  3.384164   ***
+#   2111 cg26788216  Il2  4.717701   ***
+#   2113 cg01587818  Il2  4.462839   ***
+#   2119 cg22548335  Il2  3.619987   ***
+#   2161 cg04180924  Il2  6.204807   ***
+#   2184 cg03715305  Il2  4.178052   ***
+#   2214 cg05372996  Il2  4.721364   ***
+#   2217 cg12547807  Il2  3.978295   ***
+#   2268 cg02732789  Il2  4.964166   ***
+#   2280 cg12329529  Il2  5.417043   ***
+#   2286 cg06235438  Il2  4.467515   ***
+#   2304 cg06049452  Il2  3.621753   ***
+#   2324 cg14391737  Il2  5.190990   ***
+#   2339 cg06888756  Il2  3.286508   ***
+#   2343 cg10594473  Il2  3.004937   ***
+#   2355 cg23667432  Il2  5.332203   ***
+#   2370 cg07097487  Il2  3.213970   ***
+#   2374 cg21161138  Il2 10.189929   ***
+#   2375 cg18974499  Il2  3.744633   ***
+#   2402 cg14377032  Il2  3.046107   ***
+
+#SEB
+annot[annot$Probe=="cg23462985", "Probe_gene"]
+annot[annot$Probe=="cg05575921", "Probe_gene"]
+annot[annot$Probe=="cg21161138", "Probe_gene"]
+annot[annot$Probe=="cg01940273", "Probe_gene"]
+annot[annot$Probe=="cg19859270", "Probe_gene"]
+annot[annot$Probe=="cg05934812", "Probe_gene"]
+annot[annot$Probe=="cg25006149", "Probe_gene"]
+annot[annot$Probe=="cg03636183", "Probe_gene"]
+annot[annot$Probe=="cg00475490", "Probe_gene"]
+annot[annot$Probe=="cg09403758", "Probe_gene"]
+
+
+#save.image("Selection129probes.rda")
+
+```

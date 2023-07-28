@@ -1,0 +1,406 @@
+---
+title: "Milieu Intérieur Project: Cytokine Data Analysis"
+date: "2023-06-10"
+author: "Violaine Saint-André"
+
+## License
+#  Milieu Intérieur Project: Cytokine Data Analysis
+#     Copyright (C) 2023  Violaine Saint-André
+#     contact: violaine.saint-andre@pasteur.fr
+# 
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+##
+---
+
+## Set parameters and import libraries
+```{r, results="hide"}
+
+# import libraries
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+library(rmarkdown)
+library(reshape2)
+library(RColorBrewer) 
+library(scales)
+library(cowplot)
+library(ggplot2)
+
+# set path for results
+pathRes <- "./RESULTS"
+
+```
+
+## Import proteomic matrix
+
+```{r, results="hide"}
+df.data <- read.table(file="./TableS1.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+
+# remove the donors that have been reprocessed
+  # adding 302 as it is missing values for LPS 
+  # removed 883 who removed consent for everything
+df.data.v1 <- df.data %>% 
+  filter(!(DonorId %in% c(96, 104,	122,	167,	178,	219,	268,	279,	303,	308,	534,	701, 302, 883))) 
+
+dta <- df.data.v1[,c(1,2:ncol(df.data.v1))]
+
+#Log transformation
+dta.log <- dta
+dta.log[,4:ncol(dta)] <- log(dta[,4:ncol(dta)])
+dataProt <- dta.log
+
+head(dataProt)
+
+```
+
+## Upload the variable Table with SNPs
+
+```{r, results="hide"}
+
+df_data_all <- read.table(file="./df_data_all_137.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE) 
+colnames(df_data_all)
+
+df_data_all <- df_data_all %>% dplyr::select(-"BATCHID")
+
+df_data_allsel <- df_data_all[,c('SUBJID','AGE.V0', 'SEX', 'TABAC.T1','BMI.V0', 'CMV.V1')]
+#colnames(df_data_allsel) <- c('SUBJID','AGE.V0', 'SEX', 'SMOKING','BMI', 'CMV')
+
+cisSNPs <- read.table(file="./Geno_cisSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+colnames(cisSNPs)
+
+df_data_allsel_cisSNPs <- merge(df_data_allsel, cisSNPs, by.x= "SUBJID", by.y="SUBJID")
+
+transSNPs <- read.table(file="./Geno_transSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+transSNPs <- transSNPs %>% dplyr::select(-c("rs352045", "rs143060887")) # these are already in the cis list
+colnames(transSNPs)
+
+df_data_allsel_cisSNPs_transSNPs <- merge(df_data_allsel_cisSNPs, transSNPs, by.x= "SUBJID", by.y="SUBJID")
+
+```
+
+## Compute Interractions for Smoking with SNPs
+```{r, results="hide"}
+
+# prepare the lists
+mat_effect_size_E <- list()
+mat_effect_size_sd_low <- list()
+mat_effect_size_sd_high <- list()
+mat_p_val <- list()
+significatif <- list()
+heatmapList <- list()
+list_matDATAPvalFDR <- list()
+
+# Loop on all stimulations 
+#stimul= "SEB"
+  
+for (stimul in c("SEB", "E.coli", "BCG", "C.albicans",  "CD3+CD28", "LPS", "PolyIC", "Influenza","IL1b", 'IFNg',"TNFa", "Null" )){  
+
+  print(paste0('stimul=',stimul))
+  diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+  
+  #To work on expressed prot only
+  dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+  dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+  diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+  
+  medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+  id <- medianVal > log(1.3)
+  protList <- colnames(dta_stim[4:16][,id])  
+  
+  curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+  curr_dta[,1:3] <- dta_stim[,1:3]
+  n <- length(protList)+3
+  curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+  curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+  dta_stimul <- curr_dta
+  
+  
+  # exceptions
+  if (stimul == "TNFa") {dta_stimul <- dta_stimul[, setdiff(colnames(dta_stimul), "IL1b")] 
+  protList <- setdiff(protList, "IL1b")
+  protList <- setdiff(protList, "TNFa")
+  }
+  
+  if (stimul == "IL1b") {dta_stimul <- dta_stimul[, setdiff(colnames(dta_stimul), "IL1b")] 
+  protList <- setdiff(protList, "IL1b")
+ }
+                      
+   if (stimul ==  "CD3+CD28") {
+    dta_CD3_CD28 <- dataProt[dataProt$StimulusName == "CD3+CD28",]
+    
+    # separate data in 2 groups
+    dta_CD3_CD28num <- as.data.frame(apply(dta_CD3_CD28[, 4:16], 2, as.numeric), na.rm = T)
+    # replace NAs by imputation
+    cl <- kmeans(Hmisc::impute(dta_CD3_CD28num), 2)
+    dta_CD3_CD28_grp1 <- dta_CD3_CD28[which(cl$cluster==1),]
+    dta_CD3_CD28_grp2 <- dta_CD3_CD28[which(cl$cluster==2),]
+    
+    # then use the right group 
+    if (dim(dta_CD3_CD28_grp1)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp1
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+    
+    else if (dim(dta_CD3_CD28_grp2)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp2
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+  
+    # use the right indices for the Null
+    diffMat<- dta_stim[,4:16]-dta_Null[dta_stim$DonorId,4:16]
+    medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+    id <- medianVal > log(1.3)
+    protList <- colnames(dta_stim[4:16][,id])
+
+    curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+    curr_dta[,1:3] <- dta_stim[,1:3]
+    n <- length(protList)+3
+    curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+    curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+    dta_stimul <- curr_dta
+  }
+  
+  if (stimul ==  "Null") {
+    dta_stimul <- dataProt[dataProt$StimulusName == "Null",]
+    
+    protList <- colnames(dta_stimul[4:16])
+  }
+  
+  
+  # merge the dataframes
+  
+  if (stimul == "CD3+CD28"){
+    DF <- DF[match(ind_CD3_CD28, DF$DonorId),]
+    DF <- merge.data.frame(dta_stimul, df_data_allsel_cisSNPs_transSNPs, by.x = "DonorId", by.y = "SUBJID")
+  } else {
+    DF <- merge.data.frame(dta_stimul, df_data_allsel_cisSNPs_transSNPs, by.x = "DonorId", by.y = "SUBJID")
+  }
+  
+  
+  matList <- list()
+  matDATA <- list()
+  matDATAPval <- list()
+  p_val <- list()
+  
+  # make regressions
+  
+  listFit <- list()
+  effect_size_E_list <- list()
+  effect_size_sd_low_list <- list()
+  effect_size_sd_high_list <- list()
+  listFitPval <- list()
+  p_val_list <- list()
+ 
+  for (i in protList) {  
+  
+    print (i)
+    listCrit <- list()
+    effect_size_E <- list()
+    effect_size_sd_low <- list()
+    effect_size_sd_high <- list()
+    listPval <- list()
+  
+   for (crit in colnames(df_data_allsel_cisSNPs_transSNPs %>% dplyr::select (-c('SUBJID','AGE.V0', 'SEX', 'TABAC.T1', 'BMI.V0', 'CMV.V1')))){
+
+        
+        DF2 <- na.omit(DF[,c(crit,i,'TABAC.T1', 'AGE.V0', 'SEX', 'BatchId')])
+        
+        
+        fitm <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ x * TABAC.T1 + AGE.V0  +  SEX + BatchId), 
+                                                         list( y = i, x = crit))))[2], data=DF2)
+        
+        
+        indCrit <- grep(paste0(crit, ':TABAC.T1') ,names(coef(fitm)))
+        levelsCrit <- names(coef(fitm))[indCrit]
+      
+      
+        listCrit[crit] <- min(summary(fitm)$coefficients[grep(crit, rownames(summary(fitm)$coefficients)),'Pr(>|t|)'])
+        
+        effect_size_E[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit],
+                                           .Names=levelsCrit)
+        
+        p_val[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Pr(>|t|)'][indCrit],
+                                   .Names=levelsCrit)
+        
+        effect_size_sd_low[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] - summary(fitm)$coefficients[,'Std. Error'][indCrit],
+                                                .Names=levelsCrit)
+        effect_size_sd_high[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] + summary(fitm)$coefficients[,'Std. Error'][indCrit],
+                                                 .Names=levelsCrit)
+      
+     }
+    
+    listFit[[i]] <- unlist(listCrit)
+    
+  
+    
+    effect_size_E_list[[i]] <- unlist(effect_size_E)
+    effect_size_sd_low_list[[i]] <- unlist(effect_size_sd_low)
+    effect_size_sd_high_list[[i]] <- unlist(effect_size_sd_high)
+    p_val_list[[i]] <- unlist(p_val)
+  
+  }
+  
+  # recreate matrices
+  
+  mat_effect_size_E[[stimul]] <- as.data.frame(effect_size_E_list)
+  mat_effect_size_sd_low[[stimul]] <- as.data.frame(effect_size_sd_low_list)
+  mat_effect_size_sd_high[[stimul]] <- as.data.frame(effect_size_sd_high_list)
+  mat_p_val[[stimul]] <- as.data.frame(p_val_list)
+  
+  # multiple correction
+   matDATAPval <- as.data.frame(p_val_list)
+   matDATAPvalFDR <-matrix(nrow=nrow(matDATAPval), ncol=ncol(matDATAPval), data=p.adjust(unlist(matDATAPval), method='BY'))
+   colnames(matDATAPvalFDR) <- colnames(matDATAPval)
+   rownames(matDATAPvalFDR) <- rownames(matDATAPval)
+   
+   list_matDATAPvalFDR[[stimul]] <- matDATAPvalFDR
+  
+   matDATAselect <- apply(matDATAPvalFDR,1, function (x) (x< 0.01))
+   matDATAselect <- matDATAselect[,colSums(matDATAselect) >= 1]
+   matDATAselect <- t(matDATAselect)
+   
+  
+  melted_matDATA <- melt(as.matrix(matDATAPvalFDR))
+  melted_matDATA$value <- -log10(melted_matDATA$value)
+  melted_matDATA$stars <- cut(melted_matDATA$value, breaks=c(-Inf, 1.30103, 2, 3, Inf), label=c("", "*", "**", "***"))
+  medianValue <- median(melted_matDATA$value, na.rm=T)
+  
+  
+  #plot heatmaps 
+  heatmapList[[stimul]] <- ggplot(melted_matDATA, aes(x=Var2, y=Var1, fill=value)) +
+    geom_tile()+
+     scale_fill_gradient2(low="dark blue", mid="light blue", high="red", midpoint=medianValue) +
+    # scale_fill_gradient2(low="dark blue", mid="light blue", high="red", limits=c(0,25)) +
+    geom_text(aes(label=stars), color="black", size=2) +
+    labs(y="", x="", fill="") +
+    theme(legend.key.size = unit(1, "cm")) +
+    theme_bw() +
+    guides(fill = guide_colourbar(barwidth = 0.5,
+                                barheight = 3))+
+    theme(axis.text.x=element_text(angle = -90, hjust = 0), axis.text = element_text(size = 8))+
+    theme(axis.text = element_text(size = 5)) +
+    ggtitle(stimul)
+  
+heatmapList
+  ggsave(plot=marrangeGrob(grobs=heatmapList, nrow=4, ncol=2),width = 8.5, height = 11, filename = paste0(pathRes,'/Heatmap_InterractionsSmoking_SNPs_', Sys.Date(), '.pdf')) # for A4 format width = 8.27, height = 11.69
+  
+  
+  write.table(as.data.frame(melted_matDATA),file=paste0(pathRes, "/Heatmap_InterractionsSmoking_SNPs_",stimul, "_",  Sys.Date(),".txt"), quote=F, row.names = F, col.names = T, sep="\t")
+  
+}
+  
+``` 
+
+## Boxplots
+```{r, results="hide"}
+
+library('ggsignif')
+
+df_data_allsel_cisSNPs_transSNPsNA <- df_data_allsel_cisSNPs_transSNPs
+
+df.dataProt_temp <- dataProt %>% gather(key = 'Analyte', value = 'value', CXCL5:TNFa) 
+
+df.dataProt <- merge(df.dataProt_temp, df_data_allsel_cisSNPs_transSNPsNA, by.x='DonorId', by.y='SUBJID')
+
+df.dataProt$SMOKING[df.dataProt$TABAC.T1=="2"]<- "Active Smoker"
+df.dataProt$SMOKING[df.dataProt$TABAC.T1=="1"]<- "Past Smoker"
+df.dataProt$SMOKING[df.dataProt$TABAC.T1=="0"]<- "Never"
+
+
+# genererate boxplot for smoking
+   
+crit='rs72636686'  
+protein="IL8" 
+curr.stimulation = "BCG"
+   
+   data=df.dataProt %>% 
+     filter(StimulusName %in% curr.stimulation) %>% 
+     mutate(SMOKING = relevel(as.factor(df.dataProt[df.dataProt$StimulusName==curr.stimulation,"SMOKING"]), ref="Never")) %>% 
+     filter(Analyte %in% protein) %>% 
+     filter(rs72636686 %in% c("2","3"))
+   
+   ## t.tests
+  comparison_Never <- data %>% filter(TABAC.T1 %in% "0") %>% t.test(value ~ rs72636686, data = .)
+  comparison_Past <- data %>% filter(TABAC.T1 %in% "1") %>% t.test(value ~ rs72636686, data = .)
+  comparison_Current <- data %>% filter(TABAC.T1 %in% "2") %>% t.test(value ~ rs72636686, data = .)
+  
+  M <- max(data$value) # Prendre le max pour placer les brackets pour les annotations
+  yset <- M + 0.05*M     # Ajouter 5% du Max pour pas overlapper avec les points
+  
+  pval_vector <- c(comparison_Never$p.value, comparison_Past$p.value, comparison_Current$p.value) # creation d'un vecteur de pval pour les annotations
+
+                
+   pN <- ggplot(data = data, aes(x = as.factor(TABAC.T1) , y = value, fill = as.factor(rs72636686))) +
+     geom_boxplot() +
+     #facet_wrap(~Analyte, ncol=3, scale="free") +
+     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+     geom_boxplot(outlier.shape=NA) +
+     geom_jitter(alpha = 0.1, cex=0.8) +
+     theme_classic()+
+     ggsignif::geom_signif(
+                         y_position = c(yset, yset + 0.02 * M, yset + 0.04 * M),
+                         xmin = c(0.6, 1.6, 2.6), xmax = c(1.2, 2.2, 3.2),
+                         annotation = formatC(pval_vector, digit = 2),
+                         tip_length = 0
+                       ) +
+     xlab("Smoking status") +
+     ylab(paste0(protein," concentration (pg/ml)")) +
+     ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
+    
+##
+   
+crit='rs61934597'  
+data=df.dataProt %>% 
+     filter(StimulusName %in% curr.stimulation) %>% 
+     mutate(SMOKING = relevel(as.factor(df.dataProt[df.dataProt$StimulusName==curr.stimulation,"SMOKING"]), ref="Never")) %>% 
+     filter(Analyte %in% protein) %>% 
+     filter(rs61934597 %in% c("2","3"))
+       
+
+## t.tests
+  comparison_Never <- data %>% filter(TABAC.T1 %in% "0") %>% t.test(value ~ rs61934597, data = .)
+  comparison_Past <- data %>% filter(TABAC.T1 %in% "1") %>% t.test(value ~ rs61934597, data = .)
+  comparison_Current <- data %>% filter(TABAC.T1 %in% "2") %>% t.test(value ~ rs61934597, data = .)
+  
+  M <- max(data$value) # Prendre le max pour placer les brackets pour les annotations
+  yset <- M + 0.05*M     # Ajouter 5% du Max pour pas overlapper avec les points
+  
+  pval_vector <- c(comparison_Never$p.value, comparison_Past$p.value, comparison_Current$p.value) # creation d'un vecteur de pval pour les annotations
+  
+p2 <- ggplot(data = data, aes(x = as.factor(TABAC.T1), y = value, fill = as.factor(rs61934597))) +
+     geom_boxplot() +
+     #facet_wrap(~Analyte, ncol=3, scale="free") +
+     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+     geom_boxplot(outlier.shape=NA) +
+     geom_jitter(alpha = 0.1, cex=0.8) +
+     theme_classic()+
+     ggsignif::geom_signif(
+                         y_position = c(yset, yset + 0.02 * M, yset + 0.04 * M),
+                         xmin = c(0.6, 1.6, 2.6), xmax = c(1.2, 2.2, 3.2),
+                         annotation = formatC(pval_vector, digit = 2),
+                         tip_length = 0
+                       ) +
+     xlab("Smoking status") +
+     ylab(paste0(protein," concentration (pg/ml)")) +
+     ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
+    
+p2
+
+
+pdf(paste0(pathRes,'/BoxplotInter_',Sys.Date(), '.pdf'))
+    
+print(pN)
+
+dev.off()
+``` 
