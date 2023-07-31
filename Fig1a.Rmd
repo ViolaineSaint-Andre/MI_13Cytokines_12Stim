@@ -27,9 +27,10 @@ author: "Violaine Saint-André"
 ```{r, results="hide"}
 
 # import libraries
-library('foreach')
-library('heatmaply')
-library('dendextend')
+library(foreach)
+library(heatmaply)
+library(dendextend)
+library(reshape2)
 
 # set path for results
 pathRes="./RESULTS"

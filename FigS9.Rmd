@@ -64,7 +64,7 @@ head(dataProt)
 ```
 ## Import covariates
 ```{r, results="hide"}
-
+# Access to individuals’ genetic data (Geno_transSNPs.tx) is provided for research use only after review and approval by the Milieu Intérieur data access committee, in line with patient privacy and confidentiality agreements. Requests can be sent to milieuinterieurdac@pasteur.fr.
 transSNPs <- read.table(file="./Geno_transSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
 
 DF <- merge(dataProt, transSNPs, by.x= "DonorId", by.y="SUBJID")

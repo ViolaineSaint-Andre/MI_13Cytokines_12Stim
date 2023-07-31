@@ -141,13 +141,14 @@ col_names_num <-c(col_names_num, curr_col_names_num)
 
 mat_residus <- list()
 mat_res <- list()
+df.dataProtList <- list()
 
 
 # loop on all stimulations 
   
-#for (stimul in c("SEB", "E.coli", "BCG", "C.albicans",  "CD3+CD28", "LPS", "PolyIC", "Null","Influenza","IL1b", 'IFNg',"TNFa" )){  
+for (stimul in c("SEB", "E.coli",  "CD3+CD28", "LPS", "BCG")){  #"BCG", "C.albicans",, "PolyIC", "Null","Influenza","IL1b", 'IFNg',"TNFa"
   
-stimul <- "LPS"
+#stimul <- "LPS"
 
   print(paste0('stimul=',stimul))
   diffMat <- matrix(stimul, nrow = 998, ncol = 12)
@@ -264,6 +265,18 @@ stimul <- "LPS"
   mat_res$Cytokine <- inter[ ,1]
   mat_res$Residus <-  mat_residus$residusUnlist
   matPlot <- as.data.frame(mat_res)
+  
+  df_data_allselNA <- df_data_all
+df.dataProt <- merge(matPlot, df_data_allselNA, by.x='DonorId', by.y='SUBJID')
+
+df.dataProt$SMOKING[df.dataProt$TABAC.T1=="2"]<- "Active Smoker"
+df.dataProt$SMOKING[df.dataProt$TABAC.T1=="1"]<- "Past Smoker"
+df.dataProt$SMOKING[df.dataProt$TABAC.T1=="0"]<- "Never"
+
+
+df.dataProtList[[stimul]] <- df.dataProt
+df.dataProtList[[stimul]]$StimulusName <- stimul
+}
 
 ```
 
@@ -306,55 +319,44 @@ df.dataProt$SMOKING[df.dataProt$TABAC.T1=="0"]<- NA
 
 ###create boxplots
 ```{r, results="hide"}
-
 # rename TABAC.T1 levels 1, 2, 3
 library('ggsignif')
 
-df_data_allselNA <- df_data_all
-df.dataProt <- merge(matPlot, df_data_allselNA, by.x='DonorId', by.y='SUBJID')
-
-df.dataProt$SMOKING[df.dataProt$TABAC.T1=="2"]<- "Active Smoker"
-df.dataProt$SMOKING[df.dataProt$TABAC.T1=="1"]<- "Past Smoker"
-df.dataProt$SMOKING[df.dataProt$TABAC.T1=="0"]<- "Never"
-
-
-#df.dataProtEcoli <- df.dataProt
-#df.dataProtEcoli$StimulusName <- "E.coli"
-
-#df.dataProtSEB <- df.dataProt
-#df.dataProtSEB$StimulusName <- "SEB"
-
-#df.dataProtCD3CD28 <- df.dataProt
-#df.dataProtCD3CD28$StimulusName <- "CD3+CD28"
-
-#df.dataProtLPS <- df.dataProt
-#df.dataProtLPS$StimulusName <- "LPS"
-
-#df.dataProtBCG <- df.dataProt
-#df.dataProtBCG$StimulusName <- "BCG"
-
-
-#df.dataProtbind <- rbind(df.dataProtEcoli,df.dataProtSEB, df.dataProtCD3CD28, df.dataProtLPS, df.dataProtBCG)
+df.dataProtbind <- rbind(df.dataProtList$E.coli,df.dataProtList$SEB, df.dataProtList$`CD3+CD28`, df.dataProtList$LPS, df.dataProtList$BCG)
 
 # genererate Stimulus-centered view for each prot for each crit
 
 crit='TABAC.T1'  
 
-   protein="IL2" 
-    p <- ggplot(data=df.dataProtbind %>% filter(Cytokine==protein), 
+   protein="CXCL5" 
+    p_coli_lps <- ggplot(data=df.dataProtbind %>% filter(Cytokine==protein) %>% filter(StimulusName %in% c("E.coli", "LPS")), 
                 aes_string(x=crit, y='Residus')) + #, colour=crit
                 geom_boxplot(outlier.shape=NA) +
                 geom_jitter(alpha = 0.1) +
                 theme_classic()+
                 facet_wrap(~StimulusName, ncol=3, scale="free") +
                 geom_signif( comparisons = list(c("0", "1"), c("1", "2"), c("0","2")), test = "wilcox.test", map_signif_level=TRUE) +
-                ylim(-2.5,3)+ # pour residus CXCL5
-                ylim(-2.5,2.5)+ # pour residus IL2
+                ylim(-2.5,3)+ # for res CXCL5
                 theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
                 scale_fill_viridis_d() +
                 ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
-                
+    
     # save as PDF
-    ggsave(plot=p, filename = paste0(pathRes,'/plotResiduals_', protein,'_',crit,'_',Sys.Date(), '_fix2.5_2.5_y.pdf'), width = 7, height=7)
+    ggsave(plot=p_coli_lps, filename = paste0(pathRes,'/plotResiduals_', protein,'_',crit,'_coli_lps_', Sys.Date(), '.pdf'), width = 7, height=7)
+                
+     protein="IL2" 
+    p_seb_cd3cd28 <- ggplot(data=df.dataProtbind %>% filter(Cytokine==protein) %>% filter(StimulusName %in% c("SEB", "CD3+CD28")), 
+                aes_string(x=crit, y='Residus')) + #, colour=crit
+                geom_boxplot(outlier.shape=NA) +
+                geom_jitter(alpha = 0.1) +
+                theme_classic()+
+                facet_wrap(~StimulusName, ncol=3, scale="free") +
+                geom_signif( comparisons = list(c("0", "1"), c("1", "2"), c("0","2")), test = "wilcox.test", map_signif_level=TRUE) +
+                ylim(-2.5,3)+ # for res IL2
+                theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+                scale_fill_viridis_d() +
+                ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
+    
+    ggsave(plot=p_seb_cd3cd28, filename = paste0(pathRes,'/plotResiduals_', protein,'_',crit, '_seb_cd3cd28_', Sys.Date(), '.pdf'), width = 7, height=7)
 
 ``` 

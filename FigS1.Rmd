@@ -102,7 +102,7 @@ ri.df.v1log <- merge.data.frame(dataProt,df_data_all, by.x = "DonorId", by.y = "
 ```
 
 ## Create PCAs
-```{r, results="hide"}
+```{r, results="hide", warning=FALSE}
 
 respca <- FactoMineR::PCA(X = ri.df.v1log, 
                          scale.unit = TRUE,  #if TRUE, the data are scaled to unit variance before the analysis. 
@@ -146,7 +146,7 @@ ggsave(plot=pcaPlot, filename = paste0(pathRes,'/pcaPlots_log_', habillage, '_',
 ```
 
 ## Plot PCAs by stimultions
-```{r, results="hide"}
+```{r, results="hide", warning=FALSE}
 
 # color by age, and sex, smoking, season and batchID  
 

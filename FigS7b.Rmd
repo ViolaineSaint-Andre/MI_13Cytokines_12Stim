@@ -96,7 +96,7 @@ df_data_allsel <- df_data_all[,c('SUBJID', 'AGE.V0', 'SEX', 'TABAC.T1','NBYLTABA
 
 ## Upload methylation data
 ```{r, results="hide"}
-
+# Access to individuals’ methylation data (MIMETH_mvalues_direct_smoke.rds) is provided for research use only after review and approval by the Milieu Intérieur data access committee, in line with patient privacy and confidentiality agreements. Requests can be sent to milieuinterieurdac@pasteur.fr.
 direct <- readRDS("./MIMETH_mvalues_direct_smoke.rds")
 cglist <- as.data.frame(direct)
 #> dim(cglist)

@@ -76,6 +76,7 @@ df_data_all <- df_data_all %>% dplyr::select(-"BATCHID")
 df_data_allsel <- df_data_all[,c('SUBJID','AGE.V0', 'SEX', 'TABAC.T1','BMI.V0', 'CMV.V1')]
 #colnames(df_data_allsel) <- c('SUBJID','AGE.V0', 'SEX', 'SMOKING','BMI', 'CMV')
 
+# Access to individuals’ genetic data (Geno_cisSNPs.txt and Geno_transSNPs.txt) is provided for research use only after review and approval by the Milieu Intérieur data access committee, in line with patient privacy and confidentiality agreements. Requests can be sent to milieuinterieurdac@pasteur.fr.
 cisSNPs <- read.table(file="./Geno_cisSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
 colnames(cisSNPs)
 

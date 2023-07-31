@@ -32,6 +32,9 @@ library(ggplot2)
 library(gridExtra)
 library(rmarkdown)
 library(RColorBrewer) 
+library(reshape2)
+library(cowplot)
+
 
 # set path for results
 pathRes <- "./RESULTS"

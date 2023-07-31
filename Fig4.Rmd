@@ -113,7 +113,7 @@ col_names_num <-c(col_names_num, curr_col_names_num)
 
 ## Upload methylation data
 ```{r, results="hide"}
-
+# Access to individuals’ methylation data (MIMETH_mvalues_direct_smoke.rds) is provided for research use only after review and approval by the Milieu Intérieur data access committee, in line with patient privacy and confidentiality agreements. Requests can be sent to milieuinterieurdac@pasteur.fr.
 direct <- readRDS("./MIMETH_mvalues_direct_smoke.rds")
 direct <- as.data.frame(direct)
 tab_cg05575921 <- direct[, c("SUBJID", "cg05575921")]

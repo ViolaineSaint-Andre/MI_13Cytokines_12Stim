@@ -126,6 +126,7 @@ colnames(df_counts) <- sub('[.][^.]+$', '', colnames(df_counts))
 colnames(df_counts) <- sub('N_', '', colnames(df_counts))
 
 # methylation data
+# Access to individuals’ methylation data (methylation_for_violaine.RData) is provided for research use only after review and approval by the Milieu Intérieur data access committee, in line with patient privacy and confidentiality agreements. Requests can be sent to milieuinterieurdac@pasteur.fr.
 methylationData <- load("methylation_for_violaine.RData")
 
 prot_list <- c("CXCL5", "CSF2", "IFNG", "IL1B","IL23A", "IL2",  "IL6", "IL10","IL12A", "IL12B",  "IL13","IL17A", "IL8" )
