@@ -62,37 +62,102 @@ dataProt <- dta.log
 head(dataProt)
 
 ```
-
 ## Import covariates
 ```{r, results="hide"}
 
-cisSNPs <- read.table(file="./Geno_cisSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+transSNPs <- read.table(file="./Geno_transSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
 
-data_cisSNPsProt <- merge(dataProt, cisSNPs, by.x= "DonorId", by.y="SUBJID")
+DF <- merge(dataProt, transSNPs, by.x= "DonorId", by.y="SUBJID")
 
 
 ```
+
+## Create groups
+
+```{r, results="hide"}
+    dta_CD3_CD28 <- dataProt[dataProt$StimulusName == "CD3+CD28",]
+    
+    # separate data in 2 groups
+    dta_CD3_CD28num <- as.data.frame(apply(dta_CD3_CD28[, 4:16], 2, as.numeric), na.rm = T)
+    # replace NAs by imputation
+    cl <- kmeans(Hmisc::impute(dta_CD3_CD28num), 2)
+    dta_CD3_CD28_grp1 <- dta_CD3_CD28[which(cl$cluster==1),]
+    dta_CD3_CD28_grp2 <- dta_CD3_CD28[which(cl$cluster==2),]
+    
+    # then use the right group 
+    if (dim(dta_CD3_CD28_grp1)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp1
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }else if (dim(dta_CD3_CD28_grp2)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp2
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+  
+    dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+    diffMat<- dta_stim[,4:16]-dta_Null[dta_stim$DonorId,4:16]
+    medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+    id <- medianVal > log(1.3)
+    protList <- colnames(dta_stim[4:16][,id])
+
+    curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+    curr_dta[,1:3] <- dta_stim[,1:3]
+    n <- length(protList)+3
+    curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+    curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+    dta_stimul <- curr_dta
+    
+   # DF <- DF[match(ind_CD3_CD28, DF$DonorId),]
+    DFsel <- merge.data.frame(dta_CD3_CD28, transSNPs, by.x = "DonorId", by.y = "SUBJID")
+  
+```
+
+
 
 ## Boxplots
 ```{r, results="hide"}
 
 library('ggsignif')
-
-df_data_allsel_cisSNPs_transSNPsNA <- data_cisSNPsProt
+DF_stim <- DF[DF$StimulusName=="CD3+CD28",]
+DF2 <- DF_stim %>% dplyr::select(-c("BatchId", "StimulusName"))
 
 df.dataProt_temp <- dataProt %>% gather(key = 'Analyte', value = 'value', CXCL5:TNFa) 
-df.dataProt <- merge(df.dataProt_temp, df_data_allsel_cisSNPs_transSNPsNA, by.x='DonorId', by.y='DonorId')
+df.dataProt <- merge(df.dataProt_temp, DF2, by.x='DonorId', by.y='DonorId')
 
-# genererate boxplot 
+# genererate boxplot for all
    
-crit='rs1801274'  
+crit='rs1801274' 
 protein="IL2" 
 curr.stimulation = "CD3+CD28"
    
    data=df.dataProt %>% 
      filter(StimulusName %in% curr.stimulation) %>% 
      mutate(rs1801274 = relevel(as.factor(df.dataProt[df.dataProt$StimulusName==curr.stimulation,"rs1801274"]), ref="1")) %>% 
-     filter(Analyte %in% protein) #%>% 
+     filter(Analyte %in% protein) 
+     
+         
+   pN <- ggplot(data = data, aes(x = as.factor(rs1801274) , y = value)) +
+     geom_boxplot() +
+     #facet_wrap(~Analyte, ncol=3, scale="free") +
+     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+     geom_boxplot(outlier.shape=NA) +
+     geom_jitter(alpha = 0.1) +
+     geom_signif( comparisons = list(c("1", "2"), c("2", "3"), c("1","3")), test = "wilcox.test", map_signif_level=TRUE, textsize=4) +
+     theme_classic()+
+     xlab("rs1801274") +
+     ylab(paste0(protein," concentration (pg/ml)")) +
+     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=14), plot.title = element_text(hjust = 0.5, face="bold"), legend.position = "none")+
+     ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
+    
+# genererate boxplot for selection
+   
+crit='rs1801274' 
+protein="IL2" 
+curr.stimulation = "CD3+CD28"
+   
+   data=df.dataProt %>% 
+     filter(StimulusName %in% curr.stimulation) %>% 
+     filter(Analyte %in% protein) %>% 
+     mutate(rs1801274 = relevel(as.factor(df.dataProt[df.dataProt$StimulusName==curr.stimulation,"rs1801274"]), ref="1")) 
      
          
    pN <- ggplot(data = data, aes(x = as.factor(rs1801274) , y = value)) +
@@ -105,7 +170,8 @@ curr.stimulation = "CD3+CD28"
      xlab("rs1801274") +
      ylab(paste0(protein," concentration (pg/ml)")) +
      ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
-    
+       
+   
 pdf(paste0(pathRes,'/BoxplotIL2rs1801274_',Sys.Date(), '.pdf'))
     
 print(pN)
