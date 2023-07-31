@@ -27,8 +27,6 @@ author: "Violaine Saint-André"
 ```{r, results="hide"}
 
 # import libraries
-#library(sjstats)
-#library(stringr)
 library(dplyr)
 library(tidyr)
 library(gridExtra)
@@ -202,7 +200,6 @@ stimul= "SEB"
     curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
     dta_stimul <- curr_dta
     dta_stimul <- merge.data.frame(dta_stimul, cglist, by.x = "DonorId", by.y = "SUBJID")
-
   }
   
   if (stimul ==  "Null") {
@@ -229,8 +226,6 @@ stimul= "SEB"
   listFitPval <- list()
   p_val_list <- list()
  
-  #stimul = "Null"
-  #for (i in c("Il2", "Il13")) {  #protList
     i="IL2"
     print (i)
     listCrit <- list()
@@ -267,7 +262,7 @@ for (crit in setdiff(colnames(cglist), "SUBJID")){
     listFitPval[[i]] <- unlist(listPval)
     
  
-  ########## FDR for all
+  # FDR for all
   matDATAPval <- as.data.frame(listFitPval)
   matDATAPvalFDR <-matrix(nrow=nrow(matDATAPval), ncol=ncol(matDATAPval), data=p.adjust(unlist(matDATAPval), method='BY'))
   colnames(matDATAPvalFDR) <- colnames(matDATAPval)
@@ -278,33 +273,16 @@ for (crit in setdiff(colnames(cglist), "SUBJID")){
    #colM <- colnames(matDATAselect)
    
    colM  <-names(which(matDATAselect,TRUE))
-  # matDATAselect2 <- t(matDATAselect)
-  # matDATAselect2 <- matDATAselect2[,colSums(matDATAselect2) >= 1]
-  # rowM <- colnames(matDATAselect2)
-  # 
-  significatif[[stimul]]  <- colM
-  # significatifProt[[stimul]]  <- rowM
-
-  #matDATAselectnum <- matrix(ncol=length(colM), nrow = length(rowM), as.numeric(unlist(matDATAselect)))
-  #rownames(matDATAselectnum) <- rowM
-  #matList[[stimul]] <- t(matDATAselectnum)
-  #rownames(matList[[stimul]]) <- colM
-
-  #signiProt <- lapply(matList, function(mm) apply(mm,2,function(x) names(which(x==1))))
-
-  melted_matDATA <- melt(as.matrix(matDATAPvalFDR))
-  #melted_matDATA <- melt(as.matrix(matDATAPval))
-
-
   
+  significatif[[stimul]]  <- colM
+  
+  melted_matDATA <- melt(as.matrix(matDATAPvalFDR))
   
   melted_matDATA$value <- -log10(melted_matDATA$value)
   melted_matDATA$stars <- cut(melted_matDATA$value, breaks=c(-Inf, 1.30103, 2, 3, Inf), label=c("", "*", "**", "***"))
   medianValue <- median(melted_matDATA$value, na.rm=T)
   
-  
-  
-   #  #significant only
+   #  significant only
    heatmapList[[stimul]] <- ggplot(melted_matDATA[melted_matDATA$Var1 %in% significatif[[stimul]], ], aes(x=Var2, y=Var1, fill=value)) +
      geom_tile()+
      scale_fill_gradient2(low="dark blue", mid="light blue", high="red", midpoint=medianValue) + #midpoint=-log10(0.05)
@@ -460,18 +438,340 @@ probesIL2_SEB <- heatmapList$SEB$data$Var1
 #   2402 cg14377032  Il2  3.046107   ***
 
 #SEB
-annot[annot$Probe=="cg23462985", "Probe_gene"]
-annot[annot$Probe=="cg05575921", "Probe_gene"]
-annot[annot$Probe=="cg21161138", "Probe_gene"]
-annot[annot$Probe=="cg01940273", "Probe_gene"]
-annot[annot$Probe=="cg19859270", "Probe_gene"]
-annot[annot$Probe=="cg05934812", "Probe_gene"]
-annot[annot$Probe=="cg25006149", "Probe_gene"]
-annot[annot$Probe=="cg03636183", "Probe_gene"]
-annot[annot$Probe=="cg00475490", "Probe_gene"]
-annot[annot$Probe=="cg09403758", "Probe_gene"]
+# annot[annot$Probe=="cg23462985", "Probe_gene"]
+# annot[annot$Probe=="cg05575921", "Probe_gene"]
+# annot[annot$Probe=="cg21161138", "Probe_gene"]
+# annot[annot$Probe=="cg01940273", "Probe_gene"]
+# annot[annot$Probe=="cg19859270", "Probe_gene"]
+# annot[annot$Probe=="cg05934812", "Probe_gene"]
+# annot[annot$Probe=="cg25006149", "Probe_gene"]
+# annot[annot$Probe=="cg03636183", "Probe_gene"]
+# annot[annot$Probe=="cg00475490", "Probe_gene"]
+# annot[annot$Probe=="cg09403758", "Probe_gene"]
 
 
 #save.image("Selection129probes.rda")
 
 ```
+
+# Run regressions on 129 probes
+```{r, results="hide"}
+
+# prepare the lists
+mat_effect_size_E <- list()
+mat_effect_size_sd_low <- list()
+mat_effect_size_sd_high <- list()
+mat_p_val <- list()
+significatif <- list()
+heatmapList <- list()
+list_matDATAPvalFDR <- list()
+pval <- list()
+
+# loop on all stimulations 
+stimul= "SEB"
+  
+#for (stimul in c("SEB", "E.coli", "BCG", "C.albicans",  "CD3+CD28", "LPS", "PolyIC", "Null","Influenza","IL1b", 'IFNg',"TNFa" )){  
+  print(paste0('stimul=',stimul))
+  diffMat <- matrix(stimul, nrow = 998, ncol = 12)
+  
+  # to work on expressed prot only
+  dta_Null <- dataProt[dataProt$StimulusName == "Null",]
+  dta_stim <- dataProt[dataProt$StimulusName == stimul,]
+  diffMat<- dta_stim[,4:16]-dta_Null[,4:16]
+  
+  medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+  id <- medianVal > log(1.3)
+  protList <- colnames(dta_stim[4:16][,id])  
+  
+  curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+  curr_dta[,1:3] <- dta_stim[,1:3]
+  n <- length(protList)+3
+  curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+  curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+  dta_stimul <- curr_dta
+  dta_stimul <- merge.data.frame(dta_stimul, cglist, by.x = "DonorId", by.y = "SUBJID")
+  
+  
+  # exceptions
+  if (stimul == "TNFa") {dta_stimul <- dta_stimul[, setdiff(colnames(dta_stimul), "IL1b")] 
+  protList <- setdiff(protList, "IL1b")}
+                      
+   if (stimul ==  "CD3+CD28") {
+    dta_CD3_CD28 <- dataProt[dataProt$StimulusName == "CD3+CD28",]
+    
+    # separate data in 2 groups
+    dta_CD3_CD28num <- as.data.frame(apply(dta_CD3_CD28[, 4:16], 2, as.numeric), na.rm = T)
+    # replace NAs by imputation
+    cl <- kmeans(Hmisc::impute(dta_CD3_CD28num), 2)
+    dta_CD3_CD28_grp1 <- dta_CD3_CD28[which(cl$cluster==1),]
+    dta_CD3_CD28_grp2 <- dta_CD3_CD28[which(cl$cluster==2),]
+    
+    # then use the right group 
+    if (dim(dta_CD3_CD28_grp1)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp1
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+    
+    else if (dim(dta_CD3_CD28_grp2)[1] ==705){
+      dta_stim <- dta_CD3_CD28_grp2
+      ind_CD3_CD28 <- dta_stim$DonorId
+    }
+  
+    # use the right indices for the Null
+    diffMat<- dta_stim[,4:16]-dta_Null[dta_stim$DonorId,4:16]
+    medianVal <- apply(diffMat[,],2, function(x) abs(median(x,na.rm=T)))
+    id <- medianVal > log(1.3)
+    protList <- colnames(dta_stim[4:16][,id])
+
+    curr_dta <- as.data.frame(matrix(0, ncol = 0, nrow = nrow(dta_stim)))
+    curr_dta[,1:3] <- dta_stim[,1:3]
+    n <- length(protList)+3
+    curr_dta[,4:n] <- dta_stim[, c(colnames(dta_stim) %in% protList)]
+    curr_dta <- curr_dta[rowSums(is.na(curr_dta)) == 0,]
+    dta_stimul <- curr_dta
+    dta_stimul <- merge.data.frame(dta_stimul, cglist, by.x = "DonorId", by.y = "SUBJID")
+
+  }
+  
+  if (stimul ==  "Null") {
+    dta_stimul <- dataProt[dataProt$StimulusName == "Null",]
+    dta_stimul <- merge.data.frame(dta_stimul, cglist, by.x = "DonorId", by.y = "SUBJID")
+    protList <- colnames(dta_stimul[4:16])
+  }
+  
+  
+  # merge the dataframes
+  
+  if (stimul == "CD3+CD28"){
+    DF <- DF[match(ind_CD3_CD28, DF$DonorId),]
+    DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+  } else {
+    DF <- merge.data.frame(dta_stimul, df_data_allsel, by.x = "DonorId", by.y = "SUBJID")
+  }
+  
+
+
+ # for (crit in colnames(df_data_allsel %>% dplyr::select (-c('SUBJID', 'AGE.V0',  'SEX')))){
+  crit="TABAC.T1"
+      
+  listFit <- list()
+  effect_size_E_list <- list()
+  effect_size_sd_low_list <- list()
+  effect_size_sd_high_list <- list()
+  listFitPval <- list()
+  p_val_list <- list()
+ 
+  #stimul = "Null"
+  for (i in protList) { 
+  
+    print (i)
+    listCrit <- list()
+    effect_size_E <- list()
+    effect_size_sd_low <- list()
+    effect_size_sd_high <- list()
+    listPval <- list()
+    
+    
+      for (var in probesIL2_SEB){
+        #length(DF$var[!(is.na(DF$var))]) > 333
+      
+      if (crit %in% col_names_cat) {
+        
+        DF2 <- na.omit(DF[,c(var, crit,i,'AGE.V0', 'SEX', 'BatchId')])
+        
+        
+        fitm <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ x * z + AGE.V0 + SEX + BatchId), 
+                                                         list( x=crit, y = i, z=var))))[2], data=DF2)
+        indCrit <- grep(var,names(coef(fitm)))
+        levelsCrit <- names(coef(fitm))[indCrit]
+        
+        fitmA <- anova(fitm)
+        
+        #
+        
+        fitm2 <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ z + AGE.V0 + SEX + BatchId ),
+                                                          list(z=var, y = i))))[2], data=DF2)
+        fitmA2 <- anova(fitm2)
+        
+        fit <- anova(fitm, fitm2, test = 'Chisq')
+        
+        listPval[var] <- fit[2,'Pr(>Chi)']
+        #
+        
+        listCrit[var] <- min(summary(fitm)$coefficients[grep(var, rownames(summary(fitm)$coefficients)),'Pr(>|t|)'])
+        
+        effect_size_E[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit],
+                                           .Names=levelsCrit)
+        
+        pval[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Pr(>|t|)'][indCrit],
+                                   .Names=levelsCrit)
+        
+        effect_size_sd_low[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] - summary(fitm)$coefficients[,'Std. Error'][indCrit],
+                                                .Names=levelsCrit)
+        effect_size_sd_high[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] + summary(fitm)$coefficients[,'Std. Error'][indCrit],
+                                                 .Names=levelsCrit)
+        
+      }
+      
+      else if (crit %in% col_names_num) {
+        
+        DF2 <- na.omit(DF[,c(var, crit,i,'AGE.V0', 'SEX', 'BatchId')])
+        
+        fitm <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ x * z + AGE.V0 + SEX + BatchId), 
+                                                         list( x=crit, y = i, z=var))))[2], data=DF2)
+        indCrit <- grep(var,names(coef(fitm)))
+        levelsCrit <- names(coef(fitm))[indCrit]
+      
+        #
+        
+        fitm2 <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ z + AGE.V0 + SEX + BatchId),
+                                                          list(z=var, y = i))))[2], data=DF2)
+        
+        fit <- anova(fitm, fitm2, test = 'Chisq')
+        
+        listPval[var] <- fit[2,'Pr(>Chi)']
+        #
+        
+        listCrit[var] <- min(summary(fitm)$coefficients[grep(var, rownames(summary(fitm)$coefficients)),'Pr(>|t|)'])
+        
+        effect_size_E[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit],
+                                           .Names=levelsCrit)
+        
+        pval[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Pr(>|t|)'][indCrit],
+                                   .Names=levelsCrit)
+        
+        effect_size_sd_low[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] - summary(fitm)$coefficients[,'Std. Error'][indCrit],
+                                                .Names=levelsCrit)
+        effect_size_sd_high[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] + summary(fitm)$coefficients[,'Std. Error'][indCrit],
+                                                 .Names=levelsCrit)
+        
+        
+      }
+      
+      # add the no covar possibility at the begining
+      var <- "ABSENT"
+      if (crit %in% col_names_cat) {
+        
+        DF2 <- na.omit(DF[,c(crit,i,'AGE.V0', 'SEX', 'BatchId')])
+        
+        
+        fitm <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ x + AGE.V0 + SEX + BatchId), 
+                                                         list( x=crit, y = i))))[2], data=DF2)
+        indCrit <- grep(var,names(coef(fitm)))
+        levelsCrit <- names(coef(fitm))[indCrit]
+        
+        fitmA <- anova(fitm)
+        
+        #
+        
+        fitm2 <- lm(gsub('\\"',"",as.character(substitute(expression(y ~  AGE.V0 + SEX + BatchId ),
+                                                          list(z=var, y = i))))[2], data=DF2)
+        fitmA2 <- anova(fitm2)
+        
+        fit <- anova(fitm, fitm2, test = 'Chisq')
+        
+        listPval[var] <- fit[2,'Pr(>Chi)']
+        #
+        
+        listCrit[var] <- min(summary(fitm)$coefficients[grep(var, rownames(summary(fitm)$coefficients)),'Pr(>|t|)'])
+        
+        effect_size_E[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit],
+                                          .Names=levelsCrit)
+        
+        pval[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Pr(>|t|)'][indCrit],
+                                  .Names=levelsCrit)
+        
+        effect_size_sd_low[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] - summary(fitm)$coefficients[,'Std. Error'][indCrit],
+                                               .Names=levelsCrit)
+        effect_size_sd_high[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] + summary(fitm)$coefficients[,'Std. Error'][indCrit],
+                                                .Names=levelsCrit)
+        
+      }
+      
+      else if (crit %in% col_names_num) {
+        
+        DF2 <- na.omit(DF[,c(crit,i,'AGE.V0', 'SEX', 'BatchId')])
+        
+        fitm <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ x + AGE.V0 + SEX + BatchId), 
+                                                         list( x=crit, y = i))))[2], data=DF2)
+        indCrit <- grep(var,names(coef(fitm)))
+        levelsCrit <- names(coef(fitm))[indCrit]
+        
+        
+        #
+        
+        fitm2 <- lm(gsub('\\"',"",as.character(substitute(expression(y ~ AGE.V0 + SEX + BatchId),
+                                                          list( y = i))))[2], data=DF2)
+        
+        fit <- anova(fitm, fitm2, test = 'Chisq')
+        
+        listPval[var] <- fit[2,'Pr(>Chi)']
+        #
+        
+        listCrit[var] <- min(summary(fitm)$coefficients[grep(var, rownames(summary(fitm)$coefficients)),'Pr(>|t|)'])
+        
+        effect_size_E[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit],
+                                          .Names=levelsCrit)
+        
+        pval[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Pr(>|t|)'][indCrit],
+                                  .Names=levelsCrit)
+        
+        effect_size_sd_low[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] - summary(fitm)$coefficients[,'Std. Error'][indCrit],
+                                               .Names=levelsCrit)
+        effect_size_sd_high[[var]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] + summary(fitm)$coefficients[,'Std. Error'][indCrit],
+                                                .Names=levelsCrit)
+        
+        
+      }
+      
+    }
+    
+    listFit[[i]] <- unlist(listCrit)
+    
+    listFitPval[[i]] <- unlist(listPval)
+    
+    effect_size_E_list[[i]] <- unlist(effect_size_E)
+    effect_size_sd_low_list[[i]] <- unlist(effect_size_sd_low)
+    effect_size_sd_high_list[[i]] <- unlist(effect_size_sd_high)
+    p_val_list[[i]] <- unlist(pval)
+  }
+  
+  mat_effect_size_E[[crit]] <- as.data.frame(effect_size_E_list)
+  mat_effect_size_sd_low[[crit]] <- as.data.frame(effect_size_sd_low_list)
+  mat_effect_size_sd_high[[crit]] <- as.data.frame(effect_size_sd_high_list)
+  mat_p_val[[crit]] <- as.data.frame(p_val_list)
+  
+  
+  # FDR for all
+  matDATAPval <- as.data.frame(listFitPval)
+  matDATAPvalFDR <-matrix(nrow=nrow(matDATAPval), ncol=ncol(matDATAPval), data=p.adjust(unlist(matDATAPval), method='BY'))
+  colnames(matDATAPvalFDR) <- colnames(matDATAPval)
+  rownames(matDATAPvalFDR) <- rownames(matDATAPval)
+  
+  melted_matDATA <- melt(as.matrix(matDATAPvalFDR))
+  
+  melted_matDATA$value <- -log10(melted_matDATA$value)
+  melted_matDATA$stars <- cut(melted_matDATA$value, breaks=c(-Inf, 1.30103, 2, 3, Inf), label=c("", "*", "**", "***"))
+  medianValue <- median(melted_matDATA$value, na.rm=T)
+  
+  melted_matDATA_ordered <- melted_matDATA[order(as.character(melted_matDATA$Var1)),]
+  
+  
+  #  heatmap
+  heatmapList[[crit]] <-  ggplot(melted_matDATA_ordered, aes(x=Var2, y=Var1, fill=value)) +
+    geom_tile()+
+    #scale_fill_gradient2(low="dark blue", mid="light blue", high="red", midpoint=medianValue) + #midpoint=-log10(0.05)
+    scale_fill_gradient2(low="#471164FF", mid="#443A83", high="#AADC32FF", midpoint=medianValue) + #midpoint=-log10(0.05) # pas mal
+    #scale_fill_gradient2(low="#471164FF", mid="#2C728E", high="#AADC32FF", midpoint=medianValue) + #midpoint=-log10(0.05)
+    geom_text(aes(label=stars), color="black", size=3) +
+    labs(y="", x="", fill="-log10(adjPval)") +
+    theme_bw() + theme(axis.text.x=element_text(angle = -90, hjust = 0))+
+    theme(axis.text.x = element_text(size = 10)) +
+    theme(axis.text.y = element_text(size = 6)) +
+    scale_y_discrete(name="", limits = sort(levels(melted_matDATA_ordered$Var1), decreasing=T)) +
+    ggtitle(paste0('Stimulus = ', stimul, ' crit= ', crit))
+  
+  ggsave(plot=marrangeGrob(grobs=heatmapList, nrow=1, ncol=1), filename = paste0(pathRes, '/Smoking_IL2', stimul, Sys.Date(), '.pdf'))
+  
+ # }
+```  

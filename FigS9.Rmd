@@ -117,8 +117,8 @@ DF <- merge(dataProt, transSNPs, by.x= "DonorId", by.y="SUBJID")
 ```{r, results="hide"}
 
 library('ggsignif')
-DF_stim <- DF[DF$StimulusName=="CD3+CD28",]
-DF2 <- DF_stim %>% dplyr::select(-c("BatchId", "StimulusName"))
+
+DF2 <- DFsel %>% dplyr::select(-c("BatchId", "StimulusName"))
 
 df.dataProt_temp <- dataProt %>% gather(key = 'Analyte', value = 'value', CXCL5:TNFa) 
 df.dataProt <- merge(df.dataProt_temp, DF2, by.x='DonorId', by.y='DonorId')
@@ -149,32 +149,40 @@ curr.stimulation = "CD3+CD28"
      ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
     
 # genererate boxplot for selection
-   
+
+DF_stim <-  DF[match(ind_CD3_CD28, DF$DonorId),]
+DF2 <- DF_stim %>% dplyr::select(-c("BatchId", "StimulusName"))
+
+df.dataProt_temp <- dataProt %>% gather(key = 'Analyte', value = 'value', CXCL5:TNFa) 
+df.dataProt2 <- merge(df.dataProt_temp, DF2, by.x='DonorId', by.y='DonorId')
+      
 crit='rs1801274' 
 protein="IL2" 
 curr.stimulation = "CD3+CD28"
    
-   data=df.dataProt %>% 
+   data2=df.dataProt2 %>% 
      filter(StimulusName %in% curr.stimulation) %>% 
-     filter(Analyte %in% protein) %>% 
-     mutate(rs1801274 = relevel(as.factor(df.dataProt[df.dataProt$StimulusName==curr.stimulation,"rs1801274"]), ref="1")) 
+     filter(Analyte %in% protein) #%>% 
+     #mutate(rs1801274 = relevel(as.factor(df.dataProt2[df.dataProt2$StimulusName==curr.stimulation,"rs1801274"]), ref="1")) 
      
          
-   pN <- ggplot(data = data, aes(x = as.factor(rs1801274) , y = value)) +
+   pNsel <- ggplot(data = data2, aes(x = as.factor(rs1801274) , y = value)) +
      geom_boxplot() +
      #facet_wrap(~Analyte, ncol=3, scale="free") +
      theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
      geom_boxplot(outlier.shape=NA) +
-     geom_jitter(alpha = 0.1, cex=0.8) +
+     geom_jitter(alpha = 0.1) +
+     geom_signif( comparisons = list(c("1", "2"), c("2", "3"), c("1","3")), test = "wilcox.test", map_signif_level=TRUE, textsize=4) +
      theme_classic()+
      xlab("rs1801274") +
      ylab(paste0(protein," concentration (pg/ml)")) +
+     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=14), plot.title = element_text(hjust = 0.5, face="bold"), legend.position = "none")+
      ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
-       
    
 pdf(paste0(pathRes,'/BoxplotIL2rs1801274_',Sys.Date(), '.pdf'))
     
 print(pN)
+print(pNsel)
 
 dev.off()
 
