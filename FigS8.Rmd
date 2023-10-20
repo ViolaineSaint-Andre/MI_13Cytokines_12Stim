@@ -106,7 +106,7 @@ list_matDATAPvalFDR <- list()
 #stimul= "SEB"
   
 for (stimul in c("SEB", "E.coli", "BCG", "C.albicans",  "CD3+CD28", "LPS", "PolyIC", "Influenza","IL1b", 'IFNg',"TNFa", "Null" )){  
-
+#stimul="BCG"
   print(paste0('stimul=',stimul))
   diffMat <- matrix(stimul, nrow = 998, ncol = 12)
   
@@ -234,10 +234,10 @@ for (stimul in c("SEB", "E.coli", "BCG", "C.albicans",  "CD3+CD28", "LPS", "Poly
         p_val[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Pr(>|t|)'][indCrit],
                                    .Names=levelsCrit)
         
-        effect_size_sd_low[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] - summary(fitm)$coefficients[,'Std. Error'][indCrit],
-                                                .Names=levelsCrit)
-        effect_size_sd_high[[crit]] <- structure(.Data=summary(fitm)$coefficients[,'Estimate'][indCrit] + summary(fitm)$coefficients[,'Std. Error'][indCrit],
-                                                 .Names=levelsCrit)
+        effect_size_sd_low[[crit]] <- structure(.Data=confint(fitm, parm=levelsCrit , level=0.95)[,1], .Names=levelsCrit)
+        
+        effect_size_sd_high[[crit]] <- structure(.Data=confint(fitm, parm=levelsCrit , level=0.95)[,2], .Names=levelsCrit)
+        
       
      }
     
@@ -300,8 +300,138 @@ heatmapList
   write.table(as.data.frame(melted_matDATA),file=paste0(pathRes, "/Heatmap_InterractionsSmoking_SNPs_",stimul, "_",  Sys.Date(),".txt"), quote=F, row.names = F, col.names = T, sep="\t")
   
 }
+
+#melted_matDATA[melted_matDATA$Var1=="rs72636686.rs72636686:TABAC.T1",]
+# for BCG -log10(adj-pavl)= 12.4189408022338
   
 ``` 
+
+## Make Effect Size plots
+
+```{r, results="hide"}
+
+#for (stim in c( "E.coli", "LPS",  "SEB",  "CD3+CD28", "BCG", "PolyIC" )){ #""Null","C.albicans","Influenza","PolyIC", "IL1b", "TNFa","IFNg"
+  stim="BCG"
+  print(paste0('stim=',stim))
+ 
+  mat_effect_size_E_stim <- list()
+  mat_effect_size_sd_low_stim <- list()
+  mat_effect_size_sd_high_stim <- list()
+  mat_p_val_stim <- list()
+
+  plot_effects <- list()
+  mat_ef_crit <- list()
+
+  mat_effect_size_E_stim <- mat_effect_size_E[[stim]]
+  mat_effect_size_sd_low_stim <- mat_effect_size_sd_low[[stim]]
+  mat_effect_size_sd_high_stim <- mat_effect_size_sd_high[[stim]]
+  mat_p_val_stim <- mat_p_val[[stim]]
+  mat_listFitPval_stim <- as.data.frame(list_matDATAPvalFDR[[stim]])
+  
+  matPrint <- list()
+
+  signif <- rownames(mat_effect_size_E_stim)[unlist(sapply(significatif[[stim]], grep, x=rownames(mat_effect_size_E_stim)))]
+
+  pdf(paste0(pathRes, '/EffectSizes_', stim,'_', Sys.Date(), '.pdf'))
+ 
+  #for (crit in signif) {
+  for (crit in c("rs72636686.rs72636686:TABAC.T1", "rs352045.rs352045:TABAC.T1")) {
+    print(crit)
+    
+    mat_ef_crit[[crit]] <- data.frame(variables = colnames(mat_effect_size_E_stim[crit,]), 
+                                      effect_size = t(mat_effect_size_E_stim[crit,]), 
+                                      low = t(mat_effect_size_sd_low_stim[crit,]), 
+                                      high = t(mat_effect_size_sd_high_stim[crit,]), 
+                                      p_val= t(mat_p_val_stim[crit,]), 
+                                      p_valLTR = t(mat_listFitPval_stim[gsub("\\..*","",crit),]),
+                                      stars = cut(as.numeric(as.character(mat_listFitPval_stim[gsub("\\..*","",crit),])), 
+                                                 # breaks=c(-Inf, 0.001, 0.01, 0.05, Inf), label=c("***", "**", "*", "")))
+                                                  breaks=c(-Inf, 0.001, 0.01, 0.05, Inf), label=c("*", "", "", "")))
+    colnames(mat_ef_crit[[crit]]) <- c("variables", "effect_size","low", "high", "p_val", "p_valLTR", "stars")
+
+    mat_ef_crit[[crit]] <- as.data.frame(mat_ef_crit[[crit]])
+    mat_ef_crit[[crit]][,2:5] <- apply(mat_ef_crit[[crit]][,2:5], 2, function(x) as.numeric(x))
+    mat_ef_crit[[crit]][,2:4] <- apply(mat_ef_crit[[crit]][,2:4], 2, function(x) exp(x))
+
+    plot_effects[[crit]] <- ggplot(mat_ef_crit[[crit]] %>% mutate(pvalThreshold = p_val < .01),
+                                   aes(x=variables,
+                                       y = effect_size,
+                                       ymin = low,
+                                       ymax = high,
+                                       colour = pvalThreshold))+ 
+      scale_color_manual(values = c('TRUE'='black','FALSE'='grey')) +
+      geom_errorbar(width = 0.6, linewidth = 1.5) + 
+      geom_point(size = 2, shape = 21, fill = "white") +
+      #geom_text(aes(label = signif(as.numeric(as.character(mat_ef_crit[[crit]][, 'p_val'])), digits = 3) , 
+      #y = as.numeric(mat_ef_crit[[crit]][, 'high'])), hjust = -0.2) +
+      scale_y_continuous(labels = number_format(accuracy = 0.001)) +
+      ylab("") +
+      geom_hline(aes(yintercept = 1), colour = "black") +
+      ggtitle(paste0( crit, " in ", stim)) +
+      coord_flip() +
+      xlab(NULL) +
+      theme_bw() +
+      geom_text(aes(label=stars), color="red", size=10, position="identity") +
+      theme(axis.text = element_text(size = 12), legend.position = "none")
+    
+      #print(plot_effects[[crit]])
+    
+    matPrint[[crit]] <- as.data.frame(mat_ef_crit[[crit]])
+    matPrint[[crit]]$stim <- stim
+    matPrint[[crit]]$crit <- crit
+    
+       write.table(as.data.frame(matPrint),file=paste0(pathRes, '/EFplots_', stim, '_', crit, '_', Sys.Date(), '.txt'), quote=F, row.names = F, col.names = T, sep="\t")
+    
+  }
+  
+   
+     plot <- do.call("plot_grid", c(plot_effects, nrow = 2, ncol = 2,  
+                       align = "vh", 
+                       axis = "lb")) 
+     
+     print(plot) 
+     
+     dev.off()
+     
+     if (stim=="SEB"){
+     pdf(paste0(pathRes, '/EffectSizes_2_', stim,'_', Sys.Date(), '.pdf'))
+     plot2 <- plot_grid(plot_effects$NBYTABAC.NBYTABAC,plot_effects$TOTNROFCIGS.TOTNROFCIGS, plot_effects$ABDOCM.V0.ABDOCM.V0, plot_effects$BMI.V0.BMI.V0, 
+                                    nrow = 2, ncol = 2,  
+                       align = "vh", 
+                       axis = "lb")
+     print(plot2) 
+     dev.off()
+     
+     pdf(paste0(pathRes, '/EffectSizes_3_', stim,'_', Sys.Date(), '.pdf'))
+     plot3 <- plot_grid(plot_effects$CMV.V1.CMV.V11, plot_effects$CMV.V1.CMV.V12, 
+                                    nrow = 2, ncol = 2,  
+                       align = "vh", 
+                       axis = "lb")
+   
+     print(plot3) 
+    dev.off()
+     } else if (stim=="CD3+CD28"){
+    pdf(paste0(pathRes, '/EffectSizes_2_', stim,'_', Sys.Date(), '.pdf'))
+     plot2 <- plot_grid(plot_effects$TOTNROFCIGS.TOTNROFCIGS, plot_effects$CMV.V1.CMV.V11, plot_effects$CMV.V1.CMV.V12, 
+                                    nrow = 2, ncol = 2,  
+                       align = "vh", 
+                       axis = "lb")
+    print(plot2) 
+    dev.off()
+     } else if (stim=="LPS"){
+    pdf(paste0(pathRes, '/EffectSizes_2_', stim,'_', Sys.Date(), '.pdf'))
+     plot2 <- plot_grid(c("NBYTABAC.NBYTABAC", "TOTNROFCIGS.TOTNROFCIGS"), 
+                                    nrow = 2, ncol = 2,  
+                       align = "vh", 
+                       axis = "lb")
+     dev.off()
+    print(plot2) 
+     }
+  
+#}
+
+``` 
+
 
 ## Boxplots
 ```{r, results="hide"}
