@@ -36,6 +36,7 @@ library(RColorBrewer)
 library(scales)
 library(cowplot)
 library(ggplot2)
+library(ggpubr)
 
 # set path for results
 pathRes <- "./RESULTS"
@@ -168,9 +169,9 @@ list_matDATAPvalFDR <- list()
 
 # loop on all stimulations 
   
-#for (stimul in c("SEB", "E.coli", "BCG", "C.albicans",  "CD3+CD28", "LPS", "PolyIC", "Null","Influenza","IL1b", 'IFNg',"TNFa" )){  
+for (stimul in c("SEB", "E.coli", "BCG", "C.albicans",  "CD3+CD28", "LPS", "PolyIC", "Null","Influenza","IL1b", 'IFNg',"TNFa" )){  
 
-stimul = "C.albicans"  
+#stimul = "C.albicans"  
   print(paste0('stimul=',stimul))
   diffMat <- matrix(stimul, nrow = 998, ncol = 12)
   
@@ -352,27 +353,7 @@ stimul = "C.albicans"
   significatif[[stimul]]  <- rowM
   
     
-  # fdr by line
-  #  matDATAPval <- as.data.frame(listFitPval)
-   # matDATAPval <- apply(matDATAPval,1, function (x) p.adjust(unlist(x), method = "fdr"))
-   # matDATAPval <- t(matDATAPval)
-   # matDATAselect <- apply(matDATAPval,1, function (x) (x< 0.001))
-   # matDATAselect <- matDATAselect[,colSums(matDATAselect) >= 1]
-   # 
-   # matDATAselect <- t(matDATAselect)
-   # colM <- colnames(matDATAselect)
-   # rowM <- rownames(matDATAselect)
-   # 
-   # significatif[[stimul]]  <- rowM
-   # significatifProt[[stimul]]  <- colM
-   # 
-   # matDATAselectnum <- matrix(ncol=length(colM), nrow = length(rowM), as.numeric(unlist(matDATAselect)))
-   # rownames(matDATAselectnum) <- rowM
-   # matList[[stimul]] <- t(matDATAselectnum)
-   # rownames(matList[[stimul]]) <- colM
-   # 
-   # melted_matDATA <- melt(as.matrix(matDATAPval))
-    
+
     
   melted_matDATA <- melt(as.matrix(matDATAPvalFDR))
   melted_matDATA$value <- -log10(melted_matDATA$value)
@@ -401,7 +382,7 @@ stimul = "C.albicans"
   
   write.table(as.data.frame(melted_matDATA),file=paste0(pathRes,"/HeatmapsMethylationCytokineProbes_values_", stimul,"_", Sys.Date(),".txt"), quote=F, row.names = F, col.names = T, sep="\t")
 
-#}
+}
 
 # scatterplots
 # with stimul = "C.albicans"
@@ -416,6 +397,7 @@ stimul = "C.albicans"
                                         fill = "lightgray"))+
                       stat_cor(method = "pearson",  label.x = 1, label.y = 3 ,size= 5)+ 
                       theme(plot.title=element_text(hjust=0.5, face="bold"))
+p
 
 ```
 
