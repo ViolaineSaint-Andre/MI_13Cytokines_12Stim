@@ -77,16 +77,19 @@ df_data_allsel <- df_data_all[,c('SUBJID','AGE.V0', 'SEX', 'TABAC.T1','BMI.V0', 
 #colnames(df_data_allsel) <- c('SUBJID','AGE.V0', 'SEX', 'SMOKING','BMI', 'CMV')
 
 # Access to individuals’ genetic data (Geno_cisSNPs.txt and Geno_transSNPs.txt) is provided for research use only after review and approval by the Milieu Intérieur data access committee, in line with patient privacy and confidentiality agreements. Requests can be sent to milieuinterieurdac@pasteur.fr.
-cisSNPs <- read.table(file="./Geno_cisSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
-colnames(cisSNPs)
+#cisSNPs <- read.table(file="./Geno_cisSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+#colnames(cisSNPs)
 
-df_data_allsel_cisSNPs <- merge(df_data_allsel, cisSNPs, by.x= "SUBJID", by.y="SUBJID")
+#df_data_allsel_cisSNPs <- merge(df_data_allsel, cisSNPs, by.x= "SUBJID", by.y="SUBJID")
 
-transSNPs <- read.table(file="./Geno_transSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
-transSNPs <- transSNPs %>% dplyr::select(-c("rs352045", "rs143060887")) # these are already in the cis list
-colnames(transSNPs)
+#transSNPs <- read.table(file="./Geno_transSNPs.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+#transSNPs <- transSNPs %>% dplyr::select(-c("rs352045", "rs143060887")) # these are already in the cis list
+#colnames(transSNPs)
 
-df_data_allsel_cisSNPs_transSNPs <- merge(df_data_allsel_cisSNPs, transSNPs, by.x= "SUBJID", by.y="SUBJID")
+SNPs <- read.table(file="./Geno_cistransFinal.txt", header=TRUE, sep='\t', stringsAsFactors = FALSE)
+colnames(SNPs)
+
+df_data_allsel_cisSNPs_transSNPs <- merge(df_data_allsel, SNPs, by.x= "SUBJID", by.y="SUBJID")
 
 ```
 
@@ -489,45 +492,6 @@ curr.stimulation = "BCG"
      ylab(paste0(protein," concentration (pg/ml)")) +
      ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
     
-##
-   
-crit='rs61934597'  
-data=df.dataProt %>% 
-     filter(StimulusName %in% curr.stimulation) %>% 
-     mutate(SMOKING = relevel(as.factor(df.dataProt[df.dataProt$StimulusName==curr.stimulation,"SMOKING"]), ref="Never")) %>% 
-     filter(Analyte %in% protein) %>% 
-     filter(rs61934597 %in% c("2","3"))
-       
-
-## t.tests
-  comparison_Never <- data %>% filter(TABAC.T1 %in% "0") %>% t.test(value ~ rs61934597, data = .)
-  comparison_Past <- data %>% filter(TABAC.T1 %in% "1") %>% t.test(value ~ rs61934597, data = .)
-  comparison_Current <- data %>% filter(TABAC.T1 %in% "2") %>% t.test(value ~ rs61934597, data = .)
-  
-  M <- max(data$value) # Prendre le max pour placer les brackets pour les annotations
-  yset <- M + 0.05*M     # Ajouter 5% du Max pour pas overlapper avec les points
-  
-  pval_vector <- c(comparison_Never$p.value, comparison_Past$p.value, comparison_Current$p.value) # creation d'un vecteur de pval pour les annotations
-  
-p2 <- ggplot(data = data, aes(x = as.factor(TABAC.T1), y = value, fill = as.factor(rs61934597))) +
-     geom_boxplot() +
-     #facet_wrap(~Analyte, ncol=3, scale="free") +
-     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
-     geom_boxplot(outlier.shape=NA) +
-     geom_jitter(alpha = 0.1, cex=0.8) +
-     theme_classic()+
-     ggsignif::geom_signif(
-                         y_position = c(yset, yset + 0.02 * M, yset + 0.04 * M),
-                         xmin = c(0.6, 1.6, 2.6), xmax = c(1.2, 2.2, 3.2),
-                         annotation = formatC(pval_vector, digit = 2),
-                         tip_length = 0
-                       ) +
-     xlab("Smoking status") +
-     ylab(paste0(protein," concentration (pg/ml)")) +
-     ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
-    
-p2
-
 
 pdf(paste0(pathRes,'/BoxplotInter_',Sys.Date(), '.pdf'))
     
