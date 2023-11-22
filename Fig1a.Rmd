@@ -37,7 +37,7 @@ pathRes="./RESULTS"
 
 ```
 
-## Upload the luminex proteomic data
+## Import proteomic matrix
 ```{r, results="hide"}
 
 # import the table

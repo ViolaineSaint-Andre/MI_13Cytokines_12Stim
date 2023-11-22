@@ -619,24 +619,45 @@ df.dataProt$SMOKING[df.dataProt$TABAC.T1=="0"]<- "Never"
 
 crit='TABAC.T1'  
 
-   protein="CXCL5" 
-    p <- ggplot(data=df.dataProt %>% filter(Analyte==protein), 
-                aes_string(x=crit, y='value', fill = as.factor(df.dataProt[df.dataProt$Analyte==protein,]$SMOKING))) + #, colour=crit
+   protein="IL2"
+    p1 <- ggplot(data=df.dataProt %>% filter(Analyte==protein),
+                aes_string(x=crit, y='value')) +#, fill = as.factor(df.dataProt[df.dataProt$Analyte==protein,]$SMOKING))) + #, colour=crit
                 #geom_violin() + 
-                #geom_boxplot(color = "black", width = 0.1) 
+               # geom_boxplot(color = "black", width = 0.1)
                 geom_boxplot(outlier.shape=NA) +
                 geom_jitter(alpha = 0.1, cex=0.8) +
                 theme_classic()+
                 facet_wrap(~StimulusName, ncol=3, scale="free") +
-                geom_signif( comparisons = list(c("0", "1"), c("1", "2"), c("0","2")), test = "wilcox.test", map_signif_level=TRUE)+
-                #ylim(6,10)+ # for SEB
+                geom_signif( comparisons = list(c("0", "1"), c("1", "2"), c("0","2")), test = "wilcox.test", map_signif_level=Tgit)+
+                ylim(6,10)+ # for SEB
+                theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+                ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
+    
+                
+    ggsave(plot=p1, filename = paste0(pathRes,'/Boxplot_', protein,'_',crit,'_',Sys.Date(), '.pdf'), width = 7, height=14)
+p1
+
+# genererate boxplot for crit
+
+crit='TABAC.T1'  
+
+   protein="CXCL5"
+    p2 <- ggplot(data=df.dataProt %>% filter(Analyte==protein), 
+                aes_string(x=crit, y='value')) +#, fill = as.factor(df.dataProt[df.dataProt$Analyte==protein,]$SMOKING))) + #, colour=crit
+                #geom_violin() + 
+               # geom_boxplot(color = "black", width = 0.1)
+                geom_boxplot(outlier.shape=NA) +
+                geom_jitter(alpha = 0.1, cex=0.8) +
+                theme_classic()+
+                facet_wrap(~StimulusName, ncol=3, scale="free") +
+                geom_signif( comparisons = list(c("0", "1"), c("1", "2"), c("0","2")), test = "wilcox.test", map_signif_level=Tgit)+
                 ylim(7,12)+ # for E.coli
                 theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
                 ggtitle(paste0('Crit = ', crit, ' Prot = ', protein))
-   
+    
                 
-    ggsave(plot=p, filename = paste0(pathRes,'/Boxplot_', protein,'_',crit,'_',Sys.Date(), '.pdf'), width = 7, height=14)
-
+    ggsave(plot=p2, filename = paste0(pathRes,'/Boxplot_', protein,'_',crit,'_',Sys.Date(), '.pdf'), width = 7, height=14)
+p2
 ``` 
 
 

@@ -146,9 +146,9 @@ df.dataProtList <- list()
 
 # loop on all stimulations 
   
-for (stimul in c("SEB", "E.coli",  "CD3+CD28", "LPS", "BCG")){  #"BCG", "C.albicans",, "PolyIC", "Null","Influenza","IL1b", 'IFNg',"TNFa"
+for (stimul in c("SEB", "E.coli",  "CD3+CD28", "LPS", "BCG")){  
   
-#stimul <- "LPS"
+#stimul <- "CD3+CD28"
 
   print(paste0('stimul=',stimul))
   diffMat <- matrix(stimul, nrow = 998, ncol = 12)
@@ -308,13 +308,10 @@ df.dataProt$SMOKING[df.dataProt$TABAC.T1=="0"]<- NA
 
     # save as PDF
     ggsave(plot=p, 
-           filename = paste0(pathRes,'NBYTABAC_ResidusAgeSexBatchId',
+           filename = paste0(pathRes,'/NBYTABAC_ResidusAgeSexBatchId',
             stimul,'_colouredBy-all_col_',curr.colour,'-', Sys.Date(), '.pdf'), width = 12, height=14)
 
-   ##save session info and environment
-#packagesVersions <- sessionInfo()
-
-#save.image(file=paste0('/Users/saint-andre/Documents/MI/Environments/Residuals_', Sys.Date(), '.RData'))
+  
 ```
 
 ###create boxplots
@@ -335,7 +332,7 @@ crit='TABAC.T1'
                 geom_jitter(alpha = 0.1) +
                 theme_classic()+
                 facet_wrap(~StimulusName, ncol=3, scale="free") +
-                geom_signif( comparisons = list(c("0", "1"), c("1", "2"), c("0","2")), test = "wilcox.test", map_signif_level=TRUE) +
+                geom_signif( comparisons = list(c("0", "1"), c("1", "2"), c("0","2")), test = "wilcox.test", map_signif_level=T) +
                 ylim(-2.5,3)+ # for res CXCL5
                 theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
                 scale_fill_viridis_d() +
@@ -351,7 +348,7 @@ crit='TABAC.T1'
                 geom_jitter(alpha = 0.1) +
                 theme_classic()+
                 facet_wrap(~StimulusName, ncol=3, scale="free") +
-                geom_signif( comparisons = list(c("0", "1"), c("1", "2"), c("0","2")), test = "wilcox.test", map_signif_level=TRUE) +
+                geom_signif( comparisons = list(c("0", "1"), c("1", "2"), c("0","2")), test = "wilcox.test", map_signif_level=T) +
                 ylim(-2.5,3)+ # for res IL2
                 theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
                 scale_fill_viridis_d() +
