@@ -2,6 +2,9 @@
 
 This repository contains all reproductible scripts to generate the figures presented in the article:
 
+V. Saint-André#, B. Charbit, A. Biton, V. Rouilly, C. Possémé, A. Bertrand, M. Rotival, J. Bergstedt, E. Patin, M. L. Albert, L. Quintana-Murci, D. Duffy# & MI Consortium, Smoking changes adaptive immunity with persistent effects. Nature. 626, 827–835 (2024).
+https://www.nature.com/articles/s41586-023-06968-8
+
 Please cite this article when using this code. 
 
 Contact: violaine.saint-andre@pasteur.fr
